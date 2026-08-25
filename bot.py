@@ -21,11 +21,14 @@ m = {
     "act": False, "t1": "Team A", "t2": "Team B", "max_ov": 10, "inn": 1, "bat": "", "bwl": "", "tgt": 0,
     "sq1": [], "sq2": [], "test": False, "str": "", "nstr": "", "bowler": "", "r": 0, "w": 0, "b": 0,
     "pr": 0, "pb": 0, "ext": {"wd":0,"nb":0,"b":0,"1d":0}, "fh": False, "inp": None, "ov": [], "bats": {},
-    "bowlers": {}, "hist": [], "comm": ""
+    "bowlers": {}, "hist": [], "comm": "", "scorers": set()
 }
 
 def ov_str(b): return f"{b//6}.{b%6}"
 def crr(r, b): return f"{(r/(b/6)):.2f}" if b > 0 else "0.00"
+
+def is_scorer(uid):
+    return (not m["scorers"]) or (uid in m["scorers"])
 
 def live_card():
     s = m["bats"].get(m["str"], {"r":0,"b":0,"4":0,"6":0})
@@ -33,7 +36,7 @@ def live_card():
     bw = m["bowlers"].get(m["bowler"], {"r":0,"b":0,"w":0})
     fh = " [FREE HIT!]" if m["fh"] else ""
     cur = " ".join([f"[{x}]" for x in m["ov"]]) if m["ov"] else "None"
-    tag = "[TEST/DEMO]\n" if m["test"] else ""
+    tag = "[TEST/DEMO MODE]\n" if m["test"] else ""
     rrr = f"\nTarget: {m['tgt']} (Need {m['tgt']-m['r']} off {(m['max_ov']*6)-m['b']}b)" if m["inn"]==2 and m["tgt"]>0 else ""
     return (
         f"{tag}🏏 {m['bat']} vs {m['bwl']} (Inn {m['inn']})\n"
@@ -47,10 +50,14 @@ def live_card():
     )
 
 def scorecard_txt():
-    txt = f"📋 SCORECARD: {m['bat']} {m['r']}/{m['w']} ({ov_str(m['b'])} ov)\n================================\n"
-    for n, s in m["bats"].items(): txt += f"• {n}: {s['r']} ({s['b']}b) [4s:{s['4']} 6s:{s['6']}]\n"
-    txt += "--------------------------------\n"
-    for n, bw in m["bowlers"].items(): txt += f"• {n}: {ov_str(bw['b'])} ov | {bw['r']} r | {bw['w']} w\n"
+    txt = f"📋 SCORECARD: {m['bat']} {m['r']}/{m['w']} ({ov_str(m['b'])} ov)\n================================\nBATSMEN:\n"
+    for n, s in m["bats"].items():
+        sr = f"{(s['r']/s['b']*100):.1f}" if s['b']>0 else "0.0"
+        txt += f"• {n}: {s['r']} ({s['b']}b) [4s:{s['4']} 6s:{s['6']}] SR: {sr}\n"
+    txt += "--------------------------------\nBOWLERS:\n"
+    for n, bw in m["bowlers"].items():
+        econ = f"{(bw['r']/(bw['b']/6)):.2f}" if bw['b']>0 else "0.00"
+        txt += f"• {n}: {ov_str(bw['b'])} ov | {bw['r']} r | {bw['w']} w | Econ: {econ}\n"
     return txt
 
 def kb_score():
@@ -97,38 +104,43 @@ def save_records(win, los):
         C_DB[n]["w"] += bw["w"]; C_DB[n]["br"] += bw["r"]; C_DB[n]["bb"] += bw["b"]
     save_db(C_FILE, C_DB)
 
-@bot.message_handler(commands=['start', 'match', 'menu'])
-def cmd_start(msg):
+@bot.message_handler(commands=['match', 'cric', 'demo', 'cscore'])
+def cmd_start_custom(msg):
+    m["scorers"].add(msg.from_user.id)
     k = InlineKeyboardMarkup(row_width=2)
     k.add(InlineKeyboardButton("🏏 Real Match", callback_data="start_toss"), InlineKeyboardButton("🧪 Test/Tour Mode", callback_data="start_tour"))
     k.add(InlineKeyboardButton("🛡️ Standings", callback_data="v_teams"), InlineKeyboardButton("🏆 Leaderboard", callback_data="v_lead"))
-    bot.reply_to(msg, "🏏 Cricket Scoring Engine\nChoose option:", reply_markup=k)
+    bot.reply_to(msg, f"🏏 *Cricket Scoring Engine*\nAuthorized Scorer: @{msg.from_user.username or msg.from_user.first_name}\nChoose option:", reply_markup=k, parse_mode="Markdown")
 
-@bot.message_handler(commands=['score'])
+@bot.message_handler(commands=['scorecard'])
 def cmd_score(msg):
-    if not m["act"]: return bot.reply_to(msg, "No active match. Type /start")
-    bot.reply_to(msg, live_card(), reply_markup=kb_score())
+    if not m["act"]: return bot.reply_to(msg, "No active match. Start with /match or /demo")
+    bot.reply_to(msg, scorecard_txt())
 
 @bot.callback_query_handler(func=lambda c: True)
 def cb_handler(c):
-    cid, mid, d = c.message.chat.id, c.message.message_id, c.data
+    cid, mid, uid, d = c.message.chat.id, c.message.message_id, c.from_user.id, c.data
+
+    if d in ["v_lead", "v_teams", "full_card"]:
+        if d == "v_lead":
+            txt = "🏆 LEADERBOARD:\n" + "\n".join([f"• {p}: {s['r']} r | {s['w']} w" for p, s in sorted(C_DB.items(), key=lambda x:x[1]['r'], reverse=True)[:5]])
+            bot.send_message(cid, txt if C_DB else "No career records yet.")
+        elif d == "v_teams": bot.send_message(cid, "Team records synced.")
+        elif d == "full_card": bot.send_message(cid, scorecard_txt() if m["act"] else "No match active!")
+        return bot.answer_callback_query(c.id)
+
+    if not is_scorer(uid):
+        return bot.answer_callback_query(c.id, "⚠️ Only authorized Scorer can control match!", show_alert=True)
+
     if d == "start_tour":
         m.update({
             "act":True, "test":True, "t1":"Team A", "t2":"Team B", "max_ov":5, "inn":1,
             "bat":"Team A", "bwl":"Team B", "str":"Striker 1", "nstr":"Non-Striker 2", "bowler":"Bowler 1",
             "sq1":["Striker 1", "Non-Striker 2", "Player 3", "Player 4"], "sq2":["Bowler 1", "Bowler 2", "Bowler 3"],
-            "r":0, "w":0, "b":0, "pr":0, "pb":0, "ext":{"wd":0,"nb":0,"b":0,"1d":0}, "ov":[], "bats":{}, "bowlers":{}, "hist":[], "comm":"Test mode on!"
+            "r":0, "w":0, "b":0, "pr":0, "pb":0, "ext":{"wd":0,"nb":0,"b":0,"1d":0}, "ov":[], "bats":{}, "bowlers":{}, "hist":[], "comm":"Test mode on! Ready to score."
         })
         ensure_p(m["str"],True); ensure_p(m["nstr"],True); ensure_p(m["bowler"],False)
         return bot.edit_message_text(live_card(), chat_id=cid, message_id=mid, reply_markup=kb_score())
-
-    if d == "v_lead":
-        txt = "🏆 LEADERBOARD:\n" + "\n".join([f"• {p}: {s['r']} r | {s['w']} w" for p, s in sorted(C_DB.items(), key=lambda x:x[1]['r'], reverse=True)[:5]])
-        bot.send_message(cid, txt if C_DB else "No career records yet.")
-        return bot.answer_callback_query(c.id)
-
-    if d == "v_teams": bot.send_message(cid, "Team records synced."); return bot.answer_callback_query(c.id)
-    if d == "full_card": return bot.send_message(cid, scorecard_txt()) if m["act"] else bot.answer_callback_query(c.id, "No match active!")
 
     if d == "ask_nb":
         k = InlineKeyboardMarkup(row_width=3)
@@ -139,8 +151,8 @@ def cb_handler(c):
 
     if d == "ask_wd":
         k = InlineKeyboardMarkup(row_width=3)
-        k.add(InlineKeyboardButton("Wd + 0 (Only Wd)", callback_data="wd_run_0"), InlineKeyboardButton("Wd + 1 (Overthrow/Bye)", callback_data="wd_run_1"), InlineKeyboardButton("Wd + 2", callback_data="wd_run_2"))
-        k.add(InlineKeyboardButton("Wd + 4 (Boundary)", callback_data="wd_run_4"), InlineKeyboardButton("⬅️ Back", callback_data="live_back"))
+        k.add(InlineKeyboardButton("Wd + 0", callback_data="wd_run_0"), InlineKeyboardButton("Wd + 1", callback_data="wd_run_1"), InlineKeyboardButton("Wd + 2", callback_data="wd_run_2"))
+        k.add(InlineKeyboardButton("Wd + 4", callback_data="wd_run_4"), InlineKeyboardButton("⬅️ Back", callback_data="live_back"))
         return bot.edit_message_text("⚡ WIDE BALL! Extra runs kitne aaye?", chat_id=cid, message_id=mid, reply_markup=k)
 
     if d.startswith("nb_run_"):
@@ -149,10 +161,10 @@ def cb_handler(c):
         ensure_p(m["bowler"], False); ensure_p(m["str"], True)
         m["bowlers"][m["bowler"]]["r"] += tot
         m["bats"][m["str"]]["r"] += bat_r; m["bats"][m["str"]]["b"] += 1
-        if bat_r == 4: m["bats"][m["str"]]["4"] += 1; m["comm"] = f"💥 NO BALL + FOUR! {m['str']} hits boundary on NB!"
-        elif bat_r == 6: m["bats"][m["str"]]["6"] += 1; m["comm"] = f"🔥 NO BALL + SIX! {m['str']} smashed a massive SIX!"
-        elif bat_r > 0: m["comm"] = f"🚨 No Ball + {bat_r} runs by {m['str']}! Free Hit on next ball!"
-        else: m["comm"] = "🚨 No Ball! 1 Extra run + Free Hit!"
+        if bat_r == 4: m["bats"][m["str"]]["4"] += 1; m["comm"] = f"💥 NO BALL + FOUR! {m['str']} boundary!"
+        elif bat_r == 6: m["bats"][m["str"]]["6"] += 1; m["comm"] = f"🔥 NO BALL + SIX! {m['str']} massive SIX!"
+        elif bat_r > 0: m["comm"] = f"🚨 No Ball + {bat_r} runs by {m['str']}!"
+        else: m["comm"] = "🚨 No Ball! 1 Extra + Free Hit!"
         m["ov"].append(f"Nb+{bat_r}" if bat_r > 0 else "Nb"); m["fh"] = True
         if bat_r % 2 != 0: m["str"], m["nstr"] = m["nstr"], m["str"]
         return check_over(cid, mid)
@@ -169,11 +181,14 @@ def cb_handler(c):
 
     if d == "opt_menu":
         k = InlineKeyboardMarkup(row_width=2)
-        k.add(InlineKeyboardButton("➕ Add Player", callback_data="m_add_p"), InlineKeyboardButton("✏️ Rename", callback_data="m_rename"))
+        k.add(InlineKeyboardButton("➕ Add Scorer", callback_data="m_add_scorer"), InlineKeyboardButton("➕ Add Player", callback_data="m_add_p"))
         k.add(InlineKeyboardButton("🔄 Striker", callback_data="ch_str"), InlineKeyboardButton("🔄 Non-Str", callback_data="ch_nstr"))
         k.add(InlineKeyboardButton("🎯 Bowler", callback_data="ch_bowl"), InlineKeyboardButton("🛠️ Fix Score", callback_data="m_fix"))
         k.add(InlineKeyboardButton("🛑 Abandon", callback_data="m_abnd"), InlineKeyboardButton("⬅️ Back", callback_data="live_back"))
         return bot.edit_message_text("⚙️ SCORER CONTROLS:", chat_id=cid, message_id=mid, reply_markup=k)
+
+    if d == "m_add_scorer":
+        m["inp"] = "add_scorer"; return bot.edit_message_text("Naye scorer ka message reply karein:", chat_id=cid, message_id=mid)
 
     if d == "ch_str": return bot.edit_message_text("Select Striker:", chat_id=cid, message_id=mid, reply_markup=sq_picker(m["bat"], "st"))
     if d == "ch_nstr": return bot.edit_message_text("Select Non-Striker:", chat_id=cid, message_id=mid, reply_markup=sq_picker(m["bat"], "nst"))
@@ -183,14 +198,14 @@ def cb_handler(c):
         pfx = d.replace("cust_", ""); m["inp"] = "custom_" + pfx
         return bot.edit_message_text(f"Send custom name:", chat_id=cid, message_id=mid)
 
-    if d == "m_add_p": m["inp"] = "add_p"; return bot.edit_message_text("Send: `Name | TeamName`", chat_id=cid, message_id=mid)
-    if d == "m_rename": m["inp"] = "rename"; return bot.edit_message_text("Send: `OldName | NewName`", chat_id=cid, message_id=mid)
-    if d == "m_fix": m["inp"] = "fix"; return bot.edit_message_text("Send: `RunsDelta | WicketsDelta`", chat_id=cid, message_id=mid)
+    if d == "m_add_p": m["inp"] = "add_p"; return bot.edit_message_text("Send: `PlayerName, TeamName`", chat_id=cid, message_id=mid, parse_mode="Markdown")
+    if d == "m_fix": m["inp"] = "fix"; return bot.edit_message_text("Send: `RunsDelta WicketsDelta` (e.g. `-5 0`)", chat_id=cid, message_id=mid, parse_mode="Markdown")
     if d == "m_abnd": m["act"] = False; return bot.edit_message_text("🛑 Match Abandoned.", chat_id=cid, message_id=mid)
     if d == "live_back": return bot.edit_message_text(live_card(), chat_id=cid, message_id=mid, reply_markup=kb_score())
 
     if d == "start_toss":
-        m["test"] = False; m["inp"] = "setup"; return bot.edit_message_text("Send: `Team A | Team B | Total Overs`", chat_id=cid, message_id=mid)
+        m["test"] = False; m["inp"] = "setup"
+        return bot.edit_message_text("🏏 *Teams & Overs Bhejein:*\n\nExample:\n`Strikers, Unity, 8`\nya\n`Strikers Unity 8`", chat_id=cid, message_id=mid, parse_mode="Markdown")
 
     if d.startswith("t_call_"):
         coin = random.choice(["heads","tails"]); won = m["t1"] if d.split("_")[2] == coin else m["t2"]
@@ -291,52 +306,13 @@ def check_over(cid, mid):
         return bot.edit_message_text(f"🏁 Over Done!\n\n" + live_card() + "\n\nSelect Next Bowler:", chat_id=cid, message_id=mid, reply_markup=sq_picker(m["bwl"], "bw"))
     bot.edit_message_text(live_card(), chat_id=cid, message_id=mid, reply_markup=kb_score())
 
-@bot.message_handler(func=lambda msg: m["inp"] is not None)
-def inp_handler(msg):
-    txt, ai = msg.text.strip(), m["inp"]
-    m["inp"] = None
-    if ai and ai.startswith("custom_"):
-        pfx = ai.replace("custom_", "")
-        if pfx == "bw": m["bowler"] = txt; ensure_p(txt, False); m["act"] = True; bot.reply_to(msg, f"Bowler: {txt}"); bot.send_message(msg.chat.id, live_card(), reply_markup=kb_score())
-        elif pfx == "st": m["str"] = txt; ensure_p(txt, True); bot.send_message(msg.chat.id, live_card(), reply_markup=kb_score())
-        elif pfx == "nst": m["nstr"] = txt; ensure_p(txt, True); bot.send_message(msg.chat.id, live_card(), reply_markup=kb_score())
-    elif ai == "setup":
-        p = [x.strip() for x in txt.split("|")]
-        if len(p) >= 3:
-            m["t1"], m["t2"], m["max_ov"], m["inn"] = p[0], p[1], int(p[2]), 1
-            m["r"], m["w"], m["b"], m["pr"], m["pb"] = 0, 0, 0, 0, 0
-            m["ext"] = {"wd":0,"nb":0,"b":0,"1d":0}; m["ov"].clear(); m["bats"].clear(); m["bowlers"].clear(); m["hist"].clear()
-            k = InlineKeyboardMarkup(row_width=2)
-            k.add(InlineKeyboardButton("🪙 Heads", callback_data="t_call_heads"), InlineKeyboardButton("🪙 Tails", callback_data="t_call_tails"))
-            bot.reply_to(msg, f"🏏 {m['t1']} vs {m['t2']} ({m['max_ov']} Ov)\n{m['t1']} call toss:", reply_markup=k)
-    elif ai == "sq1":
-        m["sq1"] = [x.strip() for x in txt.split(",") if x.strip()]
-        m["inp"] = "sq2"; bot.reply_to(msg, f"Saved! Send {m['bwl']} players:")
-    elif ai == "sq2":
-        m["sq2"] = [x.strip() for x in txt.split(",") if x.strip()]
-        bot.reply_to(msg, "Squads Saved! Select Striker:", reply_markup=sq_picker(m["bat"], "st"))
-    elif ai == "add_p":
-        p = [x.strip() for x in txt.split("|")]
-        if len(p) >= 2:
-            (m["sq1"] if p[1].lower() == m["t1"].lower() else m["sq2"]).append(p[0])
-            bot.reply_to(msg, f"Added {p[0]} to {p[1]}!"); bot.send_message(msg.chat.id, live_card(), reply_markup=kb_score())
-    elif ai == "rename":
-        p = [x.strip() for x in txt.split("|")]
-        if len(p) >= 2:
-            if p[0] in C_DB: C_DB[p[1]] = C_DB.pop(p[0]); save_db(C_FILE, C_DB)
-            if m["str"] == p[0]: m["str"] = p[1]
-            if m["nstr"] == p[0]: m["nstr"] = p[1]
-            if m["bowler"] == p[0]: m["bowler"] = p[1]
-            bot.reply_to(msg, f"Renamed: {p[0]} -> {p[1]}"); bot.send_message(msg.chat.id, live_card(), reply_markup=kb_score())
-    elif ai == "fix":
-        p = [x.strip() for x in txt.split("|")]
-        if len(p) >= 2:
-            snap(); m["r"] = max(0, m["r"] + int(p[0])); m["w"] = max(0, m["w"] + int(p[1]))
-            bot.reply_to(msg, "Score fixed!"); bot.send_message(msg.chat.id, live_card(), reply_markup=kb_score())
-
-if __name__ == "__main__":
-    try: bot.remove_webhook()
-    except: pass
-    while True:
-        try: bot.infinity_polling(skip_pending=True, timeout=20)
-        except: time.sleep(3)
+def parse_multi(text):
+    for sep in ["|", ",", "-", "/"]:
+        if sep in text:
+            parts = [x.strip() for x in text.split(sep) if x.strip()]
+            if len(parts) >= 3: return parts[0], parts[1], parts[2]
+    parts = text.split()
+    if len(parts) >= 3:
+        ov = parts[-1]
+        t2 = parts[-2]
+        t1 = " ".j
