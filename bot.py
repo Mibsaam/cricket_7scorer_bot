@@ -17,7 +17,7 @@ def auto_ping():
             r_url = os.environ.get("RENDER_EXTERNAL_URL")
             if r_url:
                 urllib.request.urlopen(r_url)
-        except:
+        except Exception:
             pass
 
 threading.Thread(target=auto_ping, daemon=True).start()
@@ -31,14 +31,18 @@ H2H_FILE = "h2h_data.json"
 def load_json(fpath):
     if os.path.exists(fpath):
         try:
-            with open(fpath, "r") as f: return json.load(f)
-        except: return {}
+            with open(fpath, "r") as f:
+                return json.load(f)
+        except Exception:
+            return {}
     return {}
 
 def save_json(fpath, data):
     try:
-        with open(fpath, "w") as f: json.dump(data, f)
-    except: pass
+        with open(fpath, "w") as f:
+            json.dump(data, f)
+    except Exception:
+        pass
 
 CAREER_DB = load_json(CAREER_FILE)
 TEAMS_DB = load_json(TEAMS_FILE)
@@ -71,11 +75,14 @@ def get_h2h_str(t1, t2):
     return f"⚔️ H2H: {t1} ({w1}) - ({w2}) {t2}"
 
 def get_rrr_line():
-    if m["inn"] != 2 or m["target"] <= 0: return ""
+    if m["inn"] != 2 or m["target"] <= 0:
+        return ""
     needed = m["target"] - m["runs"]
     rem_b = (m["max_ov"] * 6) - m["balls"]
-    if needed <= 0: return f"\n🏆 *Target Achieved! {m['bat_tm']} won!*"
-    if rem_b <= 0: return f"\n🏁 *Overs Finished! Need {needed} off 0 balls*"
+    if needed <= 0:
+        return f"\n🏆 *Target Achieved! {m['bat_tm']} won!*"
+    if rem_b <= 0:
+        return f"\n🏁 *Overs Finished! Need {needed} off 0 balls*"
     rrr = (needed / (rem_b / 6))
     return f"\n🎯 *Target: {m['target']}* (Need *{needed}* runs off *{rem_b}* balls | RRR: *{rrr:.2f}*)"
 
@@ -193,13 +200,15 @@ def get_squad_picker(team_name, purpose):
     k = InlineKeyboardMarkup(row_width=2)
     squad = m["t1_squad"] if team_name == m["t1"] else m["t2_squad"]
     for p in squad:
-        if purpose in ["str", "nstr", "bat"] and p in m["batsmen"] and m["batsmen"][p].get("out"): continue
+        if purpose in ["str", "nstr", "bat"] and p in m["batsmen"] and m["batsmen"][p].get("out"):
+            continue
         k.add(InlineKeyboardButton(p, callback_data=f"sel_{purpose}_{p}"))
     k.add(InlineKeyboardButton("✍️ Type Custom Name", callback_data=f"sel_custom_{purpose}"))
     return k
 
 def save_state():
-    if len(m["history"]) > 25: m["history"].pop(0)
+    if len(m["history"]) > 25:
+        m["history"].pop(0)
     snap = copy.deepcopy({
         "runs": m["runs"], "wkts": m["wkts"], "balls": m["balls"],
         "partnership_runs": m["partnership_runs"], "partnership_balls": m["partnership_balls"],
@@ -212,9 +221,11 @@ def save_state():
     m["history"].append(snap)
 
 def undo_state():
-    if not m["history"]: return False
+    if not m["history"]:
+        return False
     last = m["history"].pop()
-    for k, v in last.items(): m[k] = v
+    for k, v in last.items():
+        m[k] = v
     return True
 
 def ensure_player(n, is_bat=True):
@@ -224,9 +235,11 @@ def ensure_player(n, is_bat=True):
         m["bowlers"][n] = {"r": 0, "b": 0, "w": 0, "m": 0}
 
 def update_lifetime_records(winner_tm, loser_tm):
-    if m["is_practice"]: return
+    if m["is_practice"]:
+        return
     for tm in [winner_tm, loser_tm]:
-        if tm not in TEAMS_DB: TEAMS_DB[tm] = {"p": 0, "w": 0, "l": 0, "hs": 0, "squad": []}
+        if tm not in TEAMS_DB:
+            TEAMS_DB[tm] = {"p": 0, "w": 0, "l": 0, "hs": 0, "squad": []}
         TEAMS_DB[tm]["p"] += 1
     TEAMS_DB[winner_tm]["w"] += 1
     TEAMS_DB[loser_tm]["l"] += 1
@@ -244,14 +257,18 @@ def update_lifetime_records(winner_tm, loser_tm):
         if pn not in CAREER_DB:
             CAREER_DB[pn] = {"matches": 0, "inns": 0, "runs": 0, "balls": 0, "4s": 0, "6s": 0, "50s": 0, "100s": 0, "hs": 0, "wkts": 0, "bowl_r": 0, "bowl_b": 0}
         CAREER_DB[pn]["matches"] += 1
-        if s["b"] > 0 or s.get("out"): CAREER_DB[pn]["inns"] += 1
+        if s["b"] > 0 or s.get("out"):
+            CAREER_DB[pn]["inns"] += 1
         CAREER_DB[pn]["runs"] += s["r"]
         CAREER_DB[pn]["balls"] += s["b"]
         CAREER_DB[pn]["4s"] += s["4s"]
         CAREER_DB[pn]["6s"] += s["6s"]
-        if s["r"] >= 100: CAREER_DB[pn]["100s"] += 1
-        elif s["r"] >= 50: CAREER_DB[pn]["50s"] += 1
-        if s["r"] > CAREER_DB[pn]["hs"]: CAREER_DB[pn]["hs"] = s["r"]
+        if s["r"] >= 100:
+            CAREER_DB[pn]["100s"] += 1
+        elif s["r"] >= 50:
+            CAREER_DB[pn]["50s"] += 1
+        if s["r"] > CAREER_DB[pn]["hs"]:
+            CAREER_DB[pn]["hs"] = s["r"]
 
     for n, bw in m["bowlers"].items():
         pn = n.strip().title()
@@ -280,7 +297,8 @@ def cmd_start(msg):
 
 @bot.message_handler(commands=['score', 'scorecard'])
 def cmd_score(msg):
-    if not m["active"]: return bot.reply_to(msg, "⚠️ Abhi koi match active nahi hai.")
+    if not m["active"]:
+        return bot.reply_to(msg, "⚠️ Abhi koi match active nahi hai.")
     bot.reply_to(msg, live_card_text(), reply_markup=get_scoring_keyboard(), parse_mode="Markdown")
 
 @bot.callback_query_handler(func=lambda call: True)
@@ -299,14 +317,17 @@ def on_action(call):
         top_runs = sorted(CAREER_DB.items(), key=lambda x: x[1]["runs"], reverse=True)
         top_wkts = sorted(CAREER_DB.items(), key=lambda x: x[1]["wkts"], reverse=True)
         txt = "🏆 CAREER LEADERBOARD 🏆\n=====================\n🟠 TOP RUNS:\n"
-        for i, (p, s) in enumerate(top_runs[:5], 1): txt += f"{i}. {p}: {s['runs']} Runs ({s['inns']} Inns)\n"
+        for i, (p, s) in enumerate(top_runs[:5], 1):
+            txt += f"{i}. {p}: {s['runs']} Runs ({s['inns']} Inns)\n"
         txt += "\n🟣 TOP WKTS:\n"
-        for i, (p, s) in enumerate(top_wkts[:5], 1): txt += f"{i}. {p}: {s['wkts']} Wkts\n"
+        for i, (p, s) in enumerate(top_wkts[:5], 1):
+            txt += f"{i}. {p}: {s['wkts']} Wkts\n"
         bot.send_message(cid, txt if CAREER_DB else "No player records yet.")
         return bot.answer_callback_query(call.id)
 
     if cdata == "sc_full_view":
-        if not m["active"]: return bot.answer_callback_query(call.id, "No active match!", show_alert=True)
+        if not m["active"]:
+            return bot.answer_callback_query(call.id, "No active match!", show_alert=True)
         bot.send_message(cid, full_scorecard_text())
         return bot.answer_callback_query(call.id)
 
@@ -342,11 +363,7 @@ def on_action(call):
         )
         k.add(
             InlineKeyboardButton("🎯 Change Bowler", callback_data="pick_replace_bowl"),
-            InlineKeyboardButton("✏️ Rename / Nickname", callback_data="opt_rename_player")
-        )
-        k.add(
-            InlineKeyboardButton("🛠️ Live Score Fix (+/-)", callback_data="opt_score_fix"),
-            InlineKeyboardButton("🌧️ Rain / DLS Par Score", callback_data="opt_dls_calc")
+            InlineKeyboardButton("🛠️ Live Score Fix", callback_data="opt_score_fix")
         )
         k.add(
             InlineKeyboardButton("➕ Add Player", callback_data="opt_add_player_mid"),
@@ -427,5 +444,6 @@ def on_action(call):
         return bot.edit_message_text(live_card_text(), chat_id=cid, message_id=mid, reply_markup=get_scoring_keyboard(), parse_mode="Markdown")
 
     if cdata == "opt_live_c":
-        if not m["active"]: return bot.answer_callback_query(call.id, "No match active!", show_alert=True)
-        return bot.edit_message_text(live_card_text(), chat_id=cid, message_id=mid, reply_markup=ge
+        if not m["active"]:
+            return bot.answer_callback_query(call.id, "No match active!", show_alert=True)
+        return bot.edit_message_text(live_card_text(
