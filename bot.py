@@ -1,15 +1,14 @@
 import os
 import json
 import copy
+import time
+import random
 import telebot
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, Update
-from flask import Flask, request
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 BOT_TOKEN = "8812331993:AAEREVNSHoSAIgPMYAz1dG1rhJP_RYRV0-w"
-RENDER_URL = "https://cricket-7scorer-bot.onrender.com"
 
 bot = telebot.TeleBot(BOT_TOKEN)
-app = Flask(__name__)
 
 CAREER_FILE = "career_data.json"
 TEAMS_FILE = "teams_data.json"
@@ -69,19 +68,6 @@ m = {
     "inn1_summary": "",
     "last_commentary": ""
 }
-
-@app.route("/")
-def home():
-    return "Server Active", 200
-
-@app.route("/" + BOT_TOKEN, methods=["POST"])
-def webhook():
-    if request.headers.get("content-type") == "application/json":
-        json_string = request.get_data().decode("utf-8")
-        update = Update.de_json(json_string)
-        bot.process_new_updates([update])
-        return "OK", 200
-    return "Forbidden", 403
 
 def get_overs_str(b):
     return f"{b // 6}.{b % 6}"
@@ -331,7 +317,6 @@ def on_action(call):
     mid = call.message.message_id
     cdata = call.data
 
-    # INSTANT DEMO / TESTING MODE
     if cdata == "opt_test_mode":
         m["active"] = True
         m["is_practice"] = True
@@ -352,7 +337,7 @@ def on_action(call):
         ensure_player(m["non_striker"], True)
         ensure_player(m["bowler"], False)
         return bot.edit_message_text(
-            "🧪 *TEST & DEMO DASHBOARD ACTIVATED*\n\nAap saare buttons (Runs, Wide, NB, Wicket, Undo, More Options) dabakar test kar sakte hain. Iska data leaderboard me count nahi hoga.\n\n" + live_card_text(),
+            "🧪 *TEST & DEMO DASHBOARD ACTIVATED*\n\nAap saare buttons test kar sakte hain. Leaderboard me data count nahi hoga.\n\n" + live_card_text(),
             chat_id=cid, message_id=mid, reply_markup=get_scoring_keyboard(), parse_mode="Markdown"
         )
 
@@ -382,7 +367,6 @@ def on_action(call):
         bot.send_message(cid, full_scorecard_text())
         return bot.answer_callback_query(call.id)
 
-    # SCORER CONTROL MENU
     if cdata == "opt_edit_menu":
         k = InlineKeyboardMarkup(row_width=2)
         k.add(
@@ -401,7 +385,7 @@ def on_action(call):
             InlineKeyboardButton("⚠️ Abandon Match", callback_data="opt_abandon_match"),
             InlineKeyboardButton("⬅️ Back to Scoring", callback_data="opt_live_c")
         )
-        return bot.edit_message_text("⚙️ *SCORER MATCH CONTROLS*\nNaya player add karein ya details edit karein:", chat_id=cid, message_id=mid, reply_markup=k, parse_mode="Markdown")
+        return bot.edit_message_text("⚙️ *SCORER MATCH CONTROLS*", chat_id=cid, message_id=mid, reply_markup=k, parse_mode="Markdown")
 
     if cdata == "opt_add_player_mid":
         m["await_input"] = "add_player_mid"
@@ -409,11 +393,11 @@ def on_action(call):
 
     if cdata == "opt_rename_player":
         m["await_input"] = "rename_player_input"
-        return bot.edit_message_text("✏️ *Player Rename / Nickname:*\n\nBhejein: `OldName | NewName`\nExample: `Adeeb | Adeeb (Sixer King)`", chat_id=cid, message_id=mid, parse_mode="Markdown")
+        return bot.edit_message_text("✏️ *Player Rename:*\n\nBhejein: `OldName | NewName`\nExample: `Adeeb | Adeeb (Sixer King)`", chat_id=cid, message_id=mid, parse_mode="Markdown")
 
     if cdata == "opt_score_fix":
         m["await_input"] = "fix_match_score"
-        return bot.edit_message_text("🛠️ *Live Score Fix:*\n\nKitne run/wicket ka antar theek karna hai?\nBhejein: `RunsDelta | WicketsDelta`\nExample: `-5 | 0` ya `2 | -1`", chat_id=cid, message_id=mid, parse_mode="Markdown")
+        return bot.edit_message_text("🛠️ *Live Score Fix:*\n\nBhejein: `RunsDelta | WicketsDelta`\nExample: `-5 | 0`", chat_id=cid, message_id=mid, parse_mode="Markdown")
 
     if cdata == "opt_abandon_match":
         m["active"] = False
@@ -473,4 +457,16 @@ def on_action(call):
         return bot.edit_message_text(f"👉 Select {lbl} ({tm}):", chat_id=cid, message_id=mid, reply_markup=picker_kb)
 
     if cdata.startswith("sel_init_"):
-        part
+        parts = cdata.split("_")
+        role = parts[2]
+        p_name = parts[3]
+        if role == "str":
+            m["striker"] = p_name
+            ensure_player(p_name, True)
+            next_kb = get_squad_picker(m["bat_tm"], "init_nstr")
+            return bot.edit_message_text(f"✅ Striker: *{p_name}*\n\n👉 Ab Non-Striker select karein:", chat_id=cid, message_id=mid, reply_markup=next_kb, parse_mode="Markdown")
+        elif role == "nstr":
+            m["non_striker"] = p_name
+            ensure_player(p_name, True)
+            next_kb = get_squad_picker(m["bowl_tm"], "init_bowl")
+            return bot.edit_message_text(f"✅ Non-Striker: *{p_name}*\n\n👉 Ab Opening Bowler select karein:", chat_id=cid, mes
