@@ -6,8 +6,16 @@ BOT_TOKEN = "8812331993:AAEREVNSHoSAIgPMYAz1dG1rhJP_RYRV0-w"
 bot = telebot.TeleBot(BOT_TOKEN)
 C_FILE, T_FILE = "career_data.json", "teams_data.json"
 
-def load_db(f): return json.load(open(f)) if os.path.exists(f) else {}
-def save_db(f, d): json.dump(d, open(f, "w"))
+def load_db(f):
+    if os.path.exists(f):
+        try: return json.load(open(f))
+        except: return {}
+    return {}
+
+def save_db(f, d):
+    try: json.dump(d, open(f, "w"))
+    except: pass
+
 C_DB, T_DB = load_db(C_FILE), load_db(T_FILE)
 
 m = {
@@ -22,7 +30,8 @@ def crr(r, b): return f"{(r/(b/6)):.2f}" if b > 0 else "0.00"
 def is_scorer(uid): return (not m["scorers"]) or (uid in m["scorers"])
 
 def live_card():
-    s, ns = m["bats"].get(m["str"], {"r":0,"b":0,"4":0,"6":0}), m["bats"].get(m["nstr"], {"r":0,"b":0,"4":0,"6":0})
+    s = m["bats"].get(m["str"], {"r":0,"b":0,"4":0,"6":0})
+    ns = m["bats"].get(m["nstr"], {"r":0,"b":0,"4":0,"6":0})
     bw = m["bowlers"].get(m["bowler"], {"r":0,"b":0,"w":0})
     fh = " [FREE HIT!]" if m["fh"] else ""
     cur = " ".join([f"[{x}]" for x in m["ov"]]) if m["ov"] else "None"
@@ -91,7 +100,8 @@ def save_records(win, los):
         C_DB[n] = C_DB.get(n, {"r":0,"b":0,"4":0,"6":0,"w":0,"br":0,"bb":0})
         C_DB[n]["w"] += bw["w"]; C_DB[n]["br"] += bw["r"]; C_DB[n]["bb"] += bw["b"]
     save_db(C_FILE, C_DB)
-    @bot.message_handler(commands=['match', 'cric', 'demo', 'cscore'])
+
+@bot.message_handler(commands=['match', 'cric', 'demo', 'cscore'])
 def cmd_start_custom(msg):
     m["scorers"].add(msg.from_user.id)
     k = InlineKeyboardMarkup(row_width=2)
@@ -297,48 +307,7 @@ def inp_handler(msg):
     m["inp"] = None
     if ai == "add_scorer":
         if msg.reply_to_message: m["scorers"].add(msg.reply_to_message.from_user.id)
-        bot.reply_to(msg, "✅ Scorer permissions granted!"); bot.send_message(msg.chat.id, live_card(), reply_markup=kb_score())
+        bot.reply_to(msg, "✅ Scorer permissions granted!")
+        bot.send_message(msg.chat.id, live_card(), reply_markup=kb_score())
     elif ai and ai.startswith("custom_"):
-        pfx = ai.replace("custom_", "")
-        if pfx == "bw": m["bowler"] = txt; ensure_p(txt, False); m["act"] = True; bot.reply_to(msg, f"Bowler: {txt}"); bot.send_message(msg.chat.id, live_card(), reply_markup=kb_score())
-        elif pfx == "st": m["str"] = txt; ensure_p(txt, True); bot.send_message(msg.chat.id, live_card(), reply_markup=kb_score())
-        elif pfx == "nst": m["nstr"] = txt; ensure_p(txt, True); bot.send_message(msg.chat.id, live_card(), reply_markup=kb_score())
-    elif ai == "setup":
-        res = parse_multi(txt)
-        if res:
-            t1, t2, ov = res
-            try:
-                ov_int = int("".join([c for c in ov if c.isdigit()]))
-                m["t1"], m["t2"], m["max_ov"], m["inn"] = t1, t2, ov_int, 1
-                m["r"], m["w"], m["b"], m["pr"], m["pb"] = 0, 0, 0, 0, 0
-                m["ext"] = {"wd":0,"nb":0,"b":0,"1d":0}; m["ov"].clear(); m["bats"].clear(); m["bowlers"].clear(); m["hist"].clear()
-                k = InlineKeyboardMarkup(row_width=2)
-                k.add(InlineKeyboardButton("🪙 Heads", callback_data="t_call_heads"), InlineKeyboardButton("🪙 Tails", callback_data="t_call_tails"))
-                bot.reply_to(msg, f"🏏 *{m['t1']} vs {m['t2']}* ({m['max_ov']} Overs)\n{m['t1']} call toss:", reply_markup=k, parse_mode="Markdown")
-            except: bot.reply_to(msg, "⚠️ Overs ko number me likhein! Example: `Strikers, Unity, 8`")
-        else: bot.reply_to(msg, "⚠️ Format: `Team1, Team2, Overs` (Example: `Strikers, Unity, 8`)")
-    elif ai == "sq1":
-        m["sq1"] = [x.strip() for x in txt.replace("\n", ",").split(",") if x.strip()]
-        m["inp"] = "sq2"; bot.reply_to(msg, f"Saved! Send {m['bwl']} players (comma separated):")
-    elif ai == "sq2":
-        m["sq2"] = [x.strip() for x in txt.replace("\n", ",").split(",") if x.strip()]
-        bot.reply_to(msg, "Squads Saved! Select Striker:", reply_markup=sq_picker(m["bat"], "st"))
-    elif ai == "add_p":
-        parts = [x.strip() for x in txt.replace("|", ",").split(",") if x.strip()]
-        if len(parts) >= 2:
-            (m["sq1"] if parts[1].lower() == m["t1"].lower() else m["sq2"]).append(parts[0])
-            bot.reply_to(msg, f"Added {parts[0]} to {parts[1]}!"); bot.send_message(msg.chat.id, live_card(), reply_markup=kb_score())
-    elif ai == "fix":
-        parts = [int(s) for s in txt.split() if s.lstrip("-").isdigit()]
-        if len(parts) >= 2:
-            snap(); m["r"] = max(0, m["r"] + parts[0]); m["w"] = max(0, m["w"] + parts[1])
-            bot.reply_to(msg, "Score fixed!"); bot.send_message(msg.chat.id, live_card(), reply_markup=kb_score())
-
-if __name__ == "__main__":
-    try: bot.remove_webhook()
-    except: pass
-    print("Bot is successfully running...")
-    while True:
-        try: bot.infinity_polling(skip_pending=True, timeout=20)
-        except Exception: time.sleep(3)
-    
+        pfx = ai.rep
