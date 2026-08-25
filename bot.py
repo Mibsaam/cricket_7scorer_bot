@@ -5,9 +5,7 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 class H(BaseHTTPRequestHandler):
     def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"OK")
+        self.send_response(200); self.end_headers(); self.wfile.write(b"OK")
 
 def run_srv():
     HTTPServer(("0.0.0.0", int(os.environ.get("PORT", 10000))), H).serve_forever()
@@ -40,18 +38,15 @@ def live_card():
     bw = m["bowlers"].get(m["bowler"], {"r":0,"b":0,"w":0})
     fh = " [FREE HIT!]" if m["fh"] else ""
     cur = " ".join([f"[{x}]" for x in m["ov"]]) if m["ov"] else "None"
-    tag = "[TEST / PRACTICE MODE]\n" if m["test"] else ""
-    rrr = ""
-    if m["inn"] == 2 and m["tgt"] > 0:
-        need, rem = m["tgt"] - m["r"], (m["max_ov"]*6) - m["b"]
-        rrr = f"\nTarget: {m['tgt']} (Need {need} off {rem}b)"
+    tag = "[TEST/DEMO MODE]\n" if m["test"] else ""
+    rrr = f"\nTarget: {m['tgt']} (Need {m['tgt']-m['r']} off {(m['max_ov']*6)-m['b']}b)" if m["inn"]==2 and m["tgt"]>0 else ""
     return (
         f"{tag}🏏 {m['bat']} vs {m['bwl']} (Inn {m['inn']})\n"
         f"LIVE: {m['r']}/{m['w']} ({ov_str(m['b'])}/{m['max_ov']} ov) CRR: {crr(m['r'],m['b'])}{rrr}{fh}\n"
         f"--------------------------------\n"
-        f"🏏 {m['str']} (On Strike): {s['r']} ({s['b']}b) [4s:{s['4']} 6s:{s['6']}]\n"
+        f"🏏 {m['str']}*: {s['r']} ({s['b']}b) [4s:{s['4']} 6s:{s['6']}]\n"
         f"🏏 {m['nstr']}: {ns['r']} ({ns['b']}b) [4s:{ns['4']} 6s:{ns['6']}]\n"
-        f"🤝 Partnership: {m['pr']} ({m['pb']}b) | 🎯 {m['bowler']}: {bw['w']}/{bw['r']} ({ov_str(bw['b'])} ov)\n"
+        f"🤝 P'ship: {m['pr']} ({m['pb']}b) | 🎯 {m['bowler']}: {bw['w']}/{bw['r']} ({ov_str(bw['b'])} ov)\n"
         f"--------------------------------\n"
         f"Extras: {sum(m['ext'].values())} | Over: {cur}\n"
         f"🎙️ {m['comm']}"
@@ -60,8 +55,7 @@ def live_card():
 def scorecard_txt():
     txt = f"📋 SCORECARD: {m['bat']} {m['r']}/{m['w']} ({ov_str(m['b'])} ov)\n================================\nBATSMEN:\n"
     for n, s in m["bats"].items():
-        sr = f"{(s['r']/s['b']*100):.1f}" if s['b']>0 else "0.0"
-        txt += f"• {n}: {s['r']} ({s['b']}b) [4s:{s['4']} 6s:{s['6']}] SR: {sr}\n"
+        txt += f"• {n}: {s['r']} ({s['b']}b) [4s:{s['4']} 6s:{s['6']}]\n"
     txt += "--------------------------------\nBOWLERS:\n"
     for n, bw in m["bowlers"].items():
         txt += f"• {n}: {ov_str(bw['b'])} ov | {bw['r']} r | {bw['w']} w\n"
@@ -69,9 +63,9 @@ def scorecard_txt():
 
 def kb_score():
     k = InlineKeyboardMarkup(row_width=3)
-    k.add(InlineKeyboardButton("0 (Dot)", callback_data="r_0"), InlineKeyboardButton("1", callback_data="r_1"), InlineKeyboardButton("2", callback_data="r_2"))
+    k.add(InlineKeyboardButton("0", callback_data="r_0"), InlineKeyboardButton("1", callback_data="r_1"), InlineKeyboardButton("2", callback_data="r_2"))
     k.add(InlineKeyboardButton("3", callback_data="r_3"), InlineKeyboardButton("4 (Four) 🔥", callback_data="r_4"), InlineKeyboardButton("6 (Six) 💥", callback_data="r_6"))
-    k.add(InlineKeyboardButton("⚡ 1D (Bat)", callback_data="oned_bat_1"), InlineKeyboardButton("⚡ 2D (Bat)", callback_data="oned_bat_2"), InlineKeyboardButton("⚡ 1D (Extra)", callback_data="oned_ext_1"))
+    k.add(InlineKeyboardButton("⚡ 1D (Bat)", callback_data="1d_bat_1"), InlineKeyboardButton("⚡ 2D (Bat)", callback_data="1d_bat_2"), InlineKeyboardButton("⚡ 1D (Extra)", callback_data="1d_ext_1"))
     k.add(InlineKeyboardButton("Wide (+1)", callback_data="w_1"), InlineKeyboardButton("NoBall (+1)", callback_data="nb_1"), InlineKeyboardButton("☝️ WICKET", callback_data="wkt_ask"))
     k.add(InlineKeyboardButton("Bye (+1)", callback_data="b_1"), InlineKeyboardButton("🔄 Strike", callback_data="swap"), InlineKeyboardButton("↩️ Undo", callback_data="undo"))
     k.add(InlineKeyboardButton("🎯 Bowler", callback_data="ch_bowl"), InlineKeyboardButton("📋 Card", callback_data="full_card"), InlineKeyboardButton("⚙️ Options", callback_data="opt_menu"))
@@ -134,7 +128,7 @@ def cb_handler(c):
             "sq1":["Striker 1", "Non-Striker 2", "Player 3", "Player 4"],
             "sq2":["Bowler 1", "Bowler 2", "Bowler 3", "Bowler 4"],
             "r":0, "w":0, "b":0, "pr":0, "pb":0, "ext":{"wd":0,"nb":0,"b":0,"lb":0,"1d":0},
-            "ov":[], "bats":{}, "bowlers":{}, "hist":[], "comm":"Test mode on! All scoring options ready."
+            "ov":[], "bats":{}, "bowlers":{}, "hist":[], "comm":"Test mode on!"
         })
         ensure_p(m["str"],True); ensure_p(m["nstr"],True); ensure_p(m["bowler"],False)
         return bot.edit_message_text(live_card(), chat_id=cid, message_id=mid, reply_markup=kb_score())
@@ -213,40 +207,28 @@ def cb_handler(c):
         snap(); r = int(d.split("_")[1]); m["r"] += r; m["b"] += 1; m["pr"] += r; m["pb"] += 1
         ensure_p(m["str"], True); ensure_p(m["bowler"], False)
         m["bats"][m["str"]]["r"] += r; m["bats"][m["str"]]["b"] += 1
-        if r == 4:
-            m["bats"][m["str"]]["4"] += 1
-            m["comm"] = f"🔥 SHAANDAAR FOUR! {m['str']} ne ball ko boundary ke paar bheja!"
-        elif r == 6:
-            m["bats"][m["str"]]["6"] += 1
-            m["comm"] = f"💥 GAGANCHUMBI SIX! {m['str']} struck a massive six out of the park!"
-        elif r == 0:
-            m["comm"] = f"Dot ball bowled by {m['bowler']}."
-        else:
-            m["comm"] = f"Quick running between the wickets for {r} run(s)."
+        if r == 4: m["bats"][m["str"]]["4"] += 1; m["comm"] = f"🔥 SHAANDAAR FOUR! {m['str']} struck a boundary!"
+        elif r == 6: m["bats"][m["str"]]["6"] += 1; m["comm"] = f"💥 GAGANCHUMBI SIX! {m['str']} hits it out of the park!"
+        elif r == 0: m["comm"] = f"Dot ball by {m['bowler']}."
+        else: m["comm"] = f"{r} run(s) taken."
         m["bowlers"][m["bowler"]]["r"] += r; m["bowlers"][m["bowler"]]["b"] += 1
         m["ov"].append(str(r)); m["fh"] = False
         if r % 2 != 0: m["str"], m["nstr"] = m["nstr"], m["str"]
         check_over(cid, mid)
 
-    elif d.startswith("oned_"):
-        snap(); parts = d.split("_")
-        mode, runs_1d = parts[1], int(parts[2])
-        m["r"] += runs_1d; m["b"] += 1; m["pr"] += runs_1d; m["pb"] += 1
+    elif d.startswith("1d_"):
+        snap(); p = d.split("_"); mode, r1d = p[1], int(p[2])
+        m["r"] += r1d; m["b"] += 1; m["pr"] += r1d; m["pb"] += 1
         ensure_p(m["bowler"], False); ensure_p(m["str"], True)
-        m["bowlers"][m["bowler"]]["b"] += 1; m["bowlers"][m["bowler"]]["r"] += runs_1d
+        m["bowlers"][m["bowler"]]["b"] += 1; m["bowlers"][m["bowler"]]["r"] += r1d
         m["bats"][m["str"]]["b"] += 1
-
         if mode == "bat":
-            m["bats"][m["str"]]["r"] += runs_1d
-            m["ov"].append(f"{runs_1d}D")
-            m["comm"] = f"🏏 1D (Bat)! {m['str']} ke khate me {runs_1d} run jud gaya!"
+            m["bats"][m["str"]]["r"] += r1d; m["ov"].append(f"{r1d}D")
+            m["comm"] = f"🏏 1D (Bat)! {m['str']} ke khate me {r1d} run jud gaya!"
         else:
-            m["ext"]["1d"] += runs_1d
-            m["ov"].append(f"E{runs_1d}D")
+            m["ext"]["1d"] += r1d; m["ov"].append(f"E{r1d}D")
             m["comm"] = f"⚡ 1D (Extra)! Gully bonus run team ke total me jud gaya!"
-
-        m["fh"] = False
-        check_over(cid, mid)
+        m["fh"] = False; check_over(cid, mid)
 
     elif d in ["w_1", "nb_1", "b_1"]:
         snap()
@@ -258,7 +240,7 @@ def cb_handler(c):
             m["ov"].append("Nb"); m["fh"] = True; m["comm"] = "🚨 NO BALL! Line cross hui, agli ball FREE HIT!"
         elif d == "b_1":
             m["r"] += 1; m["b"] += 1; m["ext"]["b"] += 1; ensure_p(m["bowler"], False); m["bowlers"][m["bowler"]]["b"] += 1
-            m["ov"].append("B1"); m["comm"] = "Batsman beat hue, keeper se chootkar 1 Bye run!"; m["str"], m["nstr"] = m["nstr"], m["str"]
+            m["ov"].append("B1"); m["comm"] = "1 Bye run!"; m["str"], m["nstr"] = m["nstr"], m["str"]
             return check_over(cid, mid)
         bot.edit_message_text(live_card(), chat_id=cid, message_id=mid, reply_markup=kb_score())
 
@@ -279,7 +261,7 @@ def cb_handler(c):
         m["bowlers"][m["bowler"]]["b"] += 1; m["bowlers"][m["bowler"]]["w"] += 1
         m["bats"][out_p]["b"] += 1; m["bats"][out_p]["out"] = True
         m["ov"].append("W"); m["fh"] = False
-        m["comm"] = f"☝️ BIG WICKET! {out_p} out hokar pavilion laut-te hue!"
+        m["comm"] = f"☝️ BIG WICKET! {out_p} out hokar laut-te hue!"
         sq = m["sq1"] if m["bat"] == m["t1"] else m["sq2"]
         if m["w"] >= len(sq) - 1 and len(sq) > 1:
             return bot.edit_message_text("🏁 ALL OUT!\n\n" + scorecard_txt(), chat_id=cid, message_id=mid)
@@ -344,4 +326,11 @@ def inp_handler(msg):
         m["sq1"] = [x.strip() for x in txt.split(",") if x.strip()]
         m["inp"] = "sq2"; bot.reply_to(msg, f"Saved! Now send {m['bwl']} players:")
     elif ai == "sq2":
-        m["sq2"] = [x.
+        m["sq2"] = [x.strip() for x in txt.split(",") if x.strip()]
+        bot.reply_to(msg, "Squads Saved! Select Striker:", reply_markup=sq_picker(m["bat"], "st"))
+    elif ai == "add_p":
+        p = [x.strip() for x in txt.split("|")]
+        if len(p) >= 2:
+            if p[1].lower() == m["t1"].lower(): m["sq1"].append(p[0])
+            else: m["sq2"].append(p[0])
+            bot.reply_to(msg, f"Added {p[0]} to {p[1]}!"); bot.send_message(msg.chat.id, live_card(), reply_markup=kb_scor
