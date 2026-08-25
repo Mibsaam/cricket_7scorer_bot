@@ -58,7 +58,7 @@ def kb_score():
     k.add(InlineKeyboardButton("0", callback_data="r_0"), InlineKeyboardButton("1", callback_data="r_1"), InlineKeyboardButton("2", callback_data="r_2"))
     k.add(InlineKeyboardButton("3", callback_data="r_3"), InlineKeyboardButton("4 (Four) 🔥", callback_data="r_4"), InlineKeyboardButton("6 (Six) 💥", callback_data="r_6"))
     k.add(InlineKeyboardButton("⚡ 1D (Bat)", callback_data="1d_bat_1"), InlineKeyboardButton("⚡ 2D (Bat)", callback_data="1d_bat_2"), InlineKeyboardButton("⚡ 1D (Extra)", callback_data="1d_ext_1"))
-    k.add(InlineKeyboardButton("Wide (+1)", callback_data="w_1"), InlineKeyboardButton("NoBall (+1)", callback_data="nb_1"), InlineKeyboardButton("☝️ WICKET", callback_data="wkt_ask"))
+    k.add(InlineKeyboardButton("Wide Menu", callback_data="ask_wd"), InlineKeyboardButton("NoBall Menu", callback_data="ask_nb"), InlineKeyboardButton("☝️ WICKET", callback_data="wkt_ask"))
     k.add(InlineKeyboardButton("Bye (+1)", callback_data="b_1"), InlineKeyboardButton("🔄 Strike", callback_data="swap"), InlineKeyboardButton("↩️ Undo", callback_data="undo"))
     k.add(InlineKeyboardButton("🎯 Bowler", callback_data="ch_bowl"), InlineKeyboardButton("📋 Card", callback_data="full_card"), InlineKeyboardButton("⚙️ Options", callback_data="opt_menu"))
     return k
@@ -129,6 +129,43 @@ def cb_handler(c):
 
     if d == "v_teams": bot.send_message(cid, "Team records synced."); return bot.answer_callback_query(c.id)
     if d == "full_card": return bot.send_message(cid, scorecard_txt()) if m["act"] else bot.answer_callback_query(c.id, "No match active!")
+
+    if d == "ask_nb":
+        k = InlineKeyboardMarkup(row_width=3)
+        k.add(InlineKeyboardButton("NB + 0", callback_data="nb_run_0"), InlineKeyboardButton("NB + 1", callback_data="nb_run_1"), InlineKeyboardButton("NB + 2", callback_data="nb_run_2"))
+        k.add(InlineKeyboardButton("NB + 3", callback_data="nb_run_3"), InlineKeyboardButton("NB + 4 (Four) 🔥", callback_data="nb_run_4"), InlineKeyboardButton("NB + 6 (Six) 💥", callback_data="nb_run_6"))
+        k.add(InlineKeyboardButton("⬅️ Back", callback_data="live_back"))
+        return bot.edit_message_text("🚨 NO BALL! Bat se kitne runs bane?", chat_id=cid, message_id=mid, reply_markup=k)
+
+    if d == "ask_wd":
+        k = InlineKeyboardMarkup(row_width=3)
+        k.add(InlineKeyboardButton("Wd + 0 (Only Wd)", callback_data="wd_run_0"), InlineKeyboardButton("Wd + 1 (Overthrow/Bye)", callback_data="wd_run_1"), InlineKeyboardButton("Wd + 2", callback_data="wd_run_2"))
+        k.add(InlineKeyboardButton("Wd + 4 (Boundary)", callback_data="wd_run_4"), InlineKeyboardButton("⬅️ Back", callback_data="live_back"))
+        return bot.edit_message_text("⚡ WIDE BALL! Extra runs kitne aaye?", chat_id=cid, message_id=mid, reply_markup=k)
+
+    if d.startswith("nb_run_"):
+        snap(); bat_r = int(d.split("_")[2]); tot = bat_r + 1
+        m["r"] += tot; m["pr"] += tot; m["ext"]["nb"] += 1
+        ensure_p(m["bowler"], False); ensure_p(m["str"], True)
+        m["bowlers"][m["bowler"]]["r"] += tot
+        m["bats"][m["str"]]["r"] += bat_r; m["bats"][m["str"]]["b"] += 1
+        if bat_r == 4: m["bats"][m["str"]]["4"] += 1; m["comm"] = f"💥 NO BALL + FOUR! {m['str']} hits boundary on NB!"
+        elif bat_r == 6: m["bats"][m["str"]]["6"] += 1; m["comm"] = f"🔥 NO BALL + SIX! {m['str']} smashed a massive SIX!"
+        elif bat_r > 0: m["comm"] = f"🚨 No Ball + {bat_r} runs by {m['str']}! Free Hit on next ball!"
+        else: m["comm"] = "🚨 No Ball! 1 Extra run + Free Hit!"
+        m["ov"].append(f"Nb+{bat_r}" if bat_r > 0 else "Nb"); m["fh"] = True
+        if bat_r % 2 != 0: m["str"], m["nstr"] = m["nstr"], m["str"]
+        return check_over(cid, mid)
+
+    if d.startswith("wd_run_"):
+        snap(); extra_r = int(d.split("_")[2]); tot = extra_r + 1
+        m["r"] += tot; m["pr"] += tot; m["ext"]["wd"] += tot
+        ensure_p(m["bowler"], False)
+        m["bowlers"][m["bowler"]]["r"] += tot
+        m["ov"].append(f"Wd+{extra_r}" if extra_r > 0 else "Wd")
+        m["comm"] = f"Wide ball + {extra_r} extra runs!" if extra_r > 0 else "Wide ball!"
+        if extra_r % 2 != 0: m["str"], m["nstr"] = m["nstr"], m["str"]
+        return bot.edit_message_text(live_card(), chat_id=cid, message_id=mid, reply_markup=kb_score())
 
     if d == "opt_menu":
         k = InlineKeyboardMarkup(row_width=2)
@@ -205,19 +242,11 @@ def cb_handler(c):
         else: m["ext"]["1d"] += r1d; m["ov"].append(f"E{r1d}D"); m["comm"] = f"⚡ 1D (Extra)! Gully bonus run!"
         m["fh"] = False; check_over(cid, mid)
 
-    elif d in ["w_1", "nb_1", "b_1"]:
-        snap()
-        if d == "w_1":
-            m["r"] += 1; m["ext"]["wd"] += 1; ensure_p(m["bowler"], False); m["bowlers"][m["bowler"]]["r"] += 1
-            m["ov"].append("Wd"); m["comm"] = "Wide ball!"
-        elif d == "nb_1":
-            m["r"] += 1; m["ext"]["nb"] += 1; ensure_p(m["bowler"], False); m["bowlers"][m["bowler"]]["r"] += 1
-            m["ov"].append("Nb"); m["fh"] = True; m["comm"] = "🚨 NO BALL! Free Hit!"
-        elif d == "b_1":
-            m["r"] += 1; m["b"] += 1; m["ext"]["b"] += 1; ensure_p(m["bowler"], False); m["bowlers"][m["bowler"]]["b"] += 1
-            m["ov"].append("B1"); m["comm"] = "1 Bye run!"; m["str"], m["nstr"] = m["nstr"], m["str"]
-            return check_over(cid, mid)
-        bot.edit_message_text(live_card(), chat_id=cid, message_id=mid, reply_markup=kb_score())
+    elif d == "b_1":
+        snap(); m["r"] += 1; m["b"] += 1; m["ext"]["b"] += 1
+        ensure_p(m["bowler"], False); m["bowlers"][m["bowler"]]["b"] += 1
+        m["ov"].append("B1"); m["comm"] = "1 Bye run!"; m["str"], m["nstr"] = m["nstr"], m["str"]
+        return check_over(cid, mid)
 
     elif d == "swap": snap(); m["str"], m["nstr"] = m["nstr"], m["str"]; bot.edit_message_text(live_card(), chat_id=cid, message_id=mid, reply_markup=kb_score())
     elif d == "undo":
@@ -311,4 +340,3 @@ if __name__ == "__main__":
     while True:
         try: bot.infinity_polling(skip_pending=True, timeout=20)
         except: time.sleep(3)
-    
