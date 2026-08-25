@@ -91,7 +91,7 @@ def ensure_p(n, bat=True):
     if bat and n not in m["bats"]: m["bats"][n] = {"r":0,"b":0,"4":0,"6":0,"out":False}
     elif not bat and n not in m["bowlers"]: m["bowlers"][n] = {"r":0,"b":0,"w":0}
 
-    @bot.message_handler(commands=['match', 'cric', 'demo', 'cscore'])
+@bot.message_handler(commands=['match', 'cric', 'demo', 'cscore'])
 def cmd_start_custom(msg):
     m["scorers"].add(msg.from_user.id)
     k = InlineKeyboardMarkup(row_width=2)
