@@ -191,7 +191,7 @@ def cb_handler(c):
 
     if d == "start_toss":
         m["test"] = False; m["inp"] = "setup"
-        return bot.edit_message_text("🏏 *Teams & Overs Bhejein:*\n\nExample:\n`Strikers, Unity, 8`\nya\n`Strikers Unity 8`", chat_id=cid, message_id=mid, parse_mode="Markdown")
+        return bot.edit_message_text("🏏 *Teams & Overs Bhejein:*\n\nExample:\n`Strikers, Unity, 8`", chat_id=cid, message_id=mid, parse_mode="Markdown")
 
     if d.startswith("t_call_"):
         coin = random.choice(["heads","tails"]); won = m["t1"] if d.split("_")[2] == coin else m["t2"]
@@ -305,4 +305,51 @@ def parse_multi(text):
 def inp_handler(msg):
     txt, ai = msg.text.strip(), m["inp"]
     m["inp"] = None
-    if ai == "add
+    if ai == "add_scorer":
+        if msg.reply_to_message: m["scorers"].add(msg.reply_to_message.from_user.id)
+        bot.reply_to(msg, "✅ Scorer permissions granted!")
+        bot.send_message(msg.chat.id, live_card(), reply_markup=kb_score())
+    elif ai and ai.startswith("custom_"):
+        pfx = ai.replace("custom_", "")
+        if pfx == "bw": m["bowler"] = txt; ensure_p(txt, False); m["act"] = True; bot.reply_to(msg, f"Bowler: {txt}"); bot.send_message(msg.chat.id, live_card(), reply_markup=kb_score())
+        elif pfx == "st": m["str"] = txt; ensure_p(txt, True); bot.send_message(msg.chat.id, live_card(), reply_markup=kb_score())
+        elif pfx == "nst": m["nstr"] = txt; ensure_p(txt, True); bot.send_message(msg.chat.id, live_card(), reply_markup=kb_score())
+    elif ai == "setup":
+        res = parse_multi(txt)
+        if res:
+            t1, t2, ov = res
+            try:
+                ov_int = int("".join([c for c in ov if c.isdigit()]))
+                m["t1"], m["t2"], m["max_ov"], m["inn"] = t1, t2, ov_int, 1
+                m["r"], m["w"], m["b"], m["pr"], m["pb"] = 0, 0, 0, 0, 0
+                m["ext"] = {"wd":0,"nb":0,"b":0,"1d":0}; m["ov"].clear(); m["bats"].clear(); m["bowlers"].clear(); m["hist"].clear()
+                k = InlineKeyboardMarkup(row_width=2)
+                k.add(InlineKeyboardButton("🪙 Heads", callback_data="t_call_heads"), InlineKeyboardButton("🪙 Tails", callback_data="t_call_tails"))
+                bot.reply_to(msg, f"🏏 *{m['t1']} vs {m['t2']}* ({m['max_ov']} Overs)\n{m['t1']} call toss:", reply_markup=k, parse_mode="Markdown")
+            except: bot.reply_to(msg, "⚠️ Overs ko number me likhein! Example: `Strikers, Unity, 8`")
+        else: bot.reply_to(msg, "⚠️ Format: `Team1, Team2, Overs` (Example: `Strikers, Unity, 8`)")
+    elif ai == "sq1":
+        m["sq1"] = [x.strip() for x in txt.replace("\n", ",").split(",") if x.strip()]
+        m["inp"] = "sq2"; bot.reply_to(msg, f"Saved! Send {m['bwl']} players (comma separated):")
+    elif ai == "sq2":
+        m["sq2"] = [x.strip() for x in txt.replace("\n", ",").split(",") if x.strip()]
+        bot.reply_to(msg, "Squads Saved! Select Striker:", reply_markup=sq_picker(m["bat"], "st"))
+    elif ai == "add_p":
+        parts = [x.strip() for x in txt.replace("|", ",").split(",") if x.strip()]
+        if len(parts) >= 2:
+            (m["sq1"] if parts[1].lower() == m["t1"].lower() else m["sq2"]).append(parts[0])
+            bot.reply_to(msg, f"Added {parts[0]} to {parts[1]}!"); bot.send_message(msg.chat.id, live_card(), reply_markup=kb_score())
+    elif ai == "fix":
+        parts = [int(s) for s in txt.split() if s.lstrip("-").isdigit()]
+        if len(parts) >= 2:
+            snap(); m["r"] = max(0, m["r"] + parts[0]); m["w"] = max(0, m["w"] + parts[1])
+            bot.reply_to(msg, "Score fixed!"); bot.send_message(msg.chat.id, live_card(), reply_markup=kb_score())
+
+if __name__ == "__main__":
+    try: bot.remove_webhook()
+    except: pass
+    print("Bot is successfully running...")
+    while True:
+        try: bot.infinity_polling(skip_pending=True, timeout=20)
+        except Exception: time.sleep(3)
+                                                                                                                                                                      
