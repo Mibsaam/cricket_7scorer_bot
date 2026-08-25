@@ -511,4 +511,22 @@ def handle_wide(message):
         return
     mp = {"Wd +0": 0, "Wd +1": 1, "Wd +2": 2, "Wd +4": 4}
     if message.text in mp:
-        process_ball(chat_id, 0, is_extra=True, extra_type="wide", bat_
+        process_ball(chat_id, 0, is_extra=True, extra_type="wide", bat_runs=mp[message.text])
+        send_score_update(chat_id, f"Wide +{mp[message.text]}")
+        user_states[chat_id] = "scoring"
+        bot.send_message(chat_id, "Continue:", reply_markup=scoring_kb(get_match(chat_id)["free_hit"]))
+
+
+@bot.message_handler(func=lambda m: user_states.get(m.chat.id) == "noball_select")
+def handle_noball(message):
+    chat_id = message.chat.id
+    if message.text == "🔙 Back":
+        user_states[chat_id] = "scoring"
+        bot.send_message(chat_id, "Back", reply_markup=scoring_kb())
+        return
+    mp = {"NB +0": 0, "NB +1": 1, "NB +2": 2, "NB +3": 3, "NB +4": 4, "NB +6": 6}
+    if message.text in mp:
+        process_ball(chat_id, 0, is_extra=True, extra_type="noball", bat_runs=mp[message.text])
+        send_score_update(chat_id, f"No Ball +{mp[message.text]} (Free Hit)")
+        user_states[chat_id] = "scoring"
+        bot.send_message(chat_id, "Continue:", reply_markup=scoring_kb(True))
