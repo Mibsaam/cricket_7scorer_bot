@@ -1,4 +1,10 @@
-import os, json, copy, threading, time, urllib.request, random
+import os
+import json
+import copy
+import threading
+import time
+import urllib.request
+import random
 from flask import Flask
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -6,6 +12,7 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 BOT_TOKEN = "8812331993:AAEREVNSHoSAIgPMYAz1dG1rhJP_RYRV0-w"
 
 app = Flask(__name__)
+
 @app.route("/")
 def home():
     return "Bot is Running 24/7", 200
@@ -49,17 +56,38 @@ TEAMS_DB = load_json(TEAMS_FILE)
 H2H_DB = load_json(H2H_FILE)
 
 m = {
-    "active": False, "t1": "Team A", "t2": "Team B", "max_ov": 10, "inn": 1,
-    "bat_tm": "", "bowl_tm": "", "target": 0, "scorers": set(),
-    "t1_squad": [], "t2_squad": [], "is_quick_mode": False, "is_practice": False,
-    "striker": "", "non_striker": "", "bowler": "",
-    "runs": 0, "wkts": 0, "balls": 0,
-    "partnership_runs": 0, "partnership_balls": 0,
+    "active": False,
+    "t1": "Team A",
+    "t2": "Team B",
+    "max_ov": 10,
+    "inn": 1,
+    "bat_tm": "",
+    "bowl_tm": "",
+    "target": 0,
+    "scorers": set(),
+    "t1_squad": [],
+    "t2_squad": [],
+    "is_quick_mode": False,
+    "is_practice": False,
+    "striker": "",
+    "non_striker": "",
+    "bowler": "",
+    "runs": 0,
+    "wkts": 0,
+    "balls": 0,
+    "partnership_runs": 0,
+    "partnership_balls": 0,
     "extras": {"wd": 0, "nb": 0, "b": 0, "lb": 0},
-    "free_hit": False, "await_input": None,
-    "cur_over": [], "over_history": [],
-    "batsmen": {}, "bowlers": {},
-    "toss_winner": "", "history": [], "inn1_summary": "", "last_commentary": ""
+    "free_hit": False,
+    "await_input": None,
+    "cur_over": [],
+    "over_history": [],
+    "batsmen": {},
+    "bowlers": {},
+    "toss_winner": "",
+    "history": [],
+    "inn1_summary": "",
+    "last_commentary": ""
 }
 
 def get_overs_str(b):
@@ -87,7 +115,9 @@ def get_rrr_line():
     return f"\n🎯 *Target: {m['target']}* (Need *{needed}* runs off *{rem_b}* balls | RRR: *{rrr:.2f}*)"
 
 def live_card_text():
-    s_n, ns_n, bw_n = m["striker"], m["non_striker"], m["bowler"]
+    s_n = m["striker"]
+    ns_n = m["non_striker"]
+    bw_n = m["bowler"]
     s = m["batsmen"].get(s_n, {"r": 0, "b": 0, "4s": 0, "6s": 0})
     ns = m["batsmen"].get(ns_n, {"r": 0, "b": 0, "4s": 0, "6s": 0})
     bw = m["bowlers"].get(bw_n, {"r": 0, "b": 0, "w": 0, "m": 0})
@@ -142,15 +172,21 @@ def full_scorecard_text():
     return txt
 
 def calculate_motm():
-    best_p, max_pts, desc = "None", -999, ""
+    best_p = "None"
+    max_pts = -999
+    desc = ""
     for n, s in m["batsmen"].items():
         pts = s["r"] + (s["4s"] * 2) + (s["6s"] * 3)
         if pts > max_pts:
-            max_pts, best_p, desc = pts, n, f"{s['r']} Runs ({s['b']}b)"
+            max_pts = pts
+            best_p = n
+            desc = f"{s['r']} Runs ({s['b']}b)"
     for n, bw in m["bowlers"].items():
         bw_pts = (bw["w"] * 25) - (bw["r"] // 3)
         if bw_pts > max_pts:
-            max_pts, best_p, desc = bw_pts, n, f"{bw['w']} Wkts, {bw['r']} Runs"
+            max_pts = bw_pts
+            best_p = n
+            desc = f"{bw['w']} Wkts, {bw['r']} Runs"
     return f"{best_p} [{desc}]"
 
 def get_career_profile(name):
@@ -210,12 +246,20 @@ def save_state():
     if len(m["history"]) > 25:
         m["history"].pop(0)
     snap = copy.deepcopy({
-        "runs": m["runs"], "wkts": m["wkts"], "balls": m["balls"],
-        "partnership_runs": m["partnership_runs"], "partnership_balls": m["partnership_balls"],
-        "striker": m["striker"], "non_striker": m["non_striker"], "bowler": m["bowler"],
-        "extras": copy.deepcopy(m["extras"]), "free_hit": m["free_hit"],
-        "cur_over": list(m["cur_over"]), "over_history": copy.deepcopy(m["over_history"]),
-        "batsmen": copy.deepcopy(m["batsmen"]), "bowlers": copy.deepcopy(m["bowlers"]),
+        "runs": m["runs"],
+        "wkts": m["wkts"],
+        "balls": m["balls"],
+        "partnership_runs": m["partnership_runs"],
+        "partnership_balls": m["partnership_balls"],
+        "striker": m["striker"],
+        "non_striker": m["non_striker"],
+        "bowler": m["bowler"],
+        "extras": copy.deepcopy(m["extras"]),
+        "free_hit": m["free_hit"],
+        "cur_over": list(m["cur_over"]),
+        "over_history": copy.deepcopy(m["over_history"]),
+        "batsmen": copy.deepcopy(m["batsmen"]),
+        "bowlers": copy.deepcopy(m["bowlers"]),
         "last_commentary": m["last_commentary"]
     })
     m["history"].append(snap)
@@ -303,7 +347,9 @@ def cmd_score(msg):
 
 @bot.callback_query_handler(func=lambda call: True)
 def on_action(call):
-    cid, mid, cdata = call.message.chat.id, call.message.message_id, call.data
+    cid = call.message.chat.id
+    mid = call.message.message_id
+    cdata = call.data
 
     if cdata == "sc_teams_view":
         txt = "🛡️ TEAM STANDINGS 🛡️\n====================\n"
@@ -441,9 +487,4 @@ def on_action(call):
         elif purpose == "bowl":
             m["bowler"] = p_name
             ensure_player(p_name, False)
-        return bot.edit_message_text(live_card_text(), chat_id=cid, message_id=mid, reply_markup=get_scoring_keyboard(), parse_mode="Markdown")
-
-    if cdata == "opt_live_c":
-        if not m["active"]:
-            return bot.answer_callback_query(call.id, "No match active!", show_alert=True)
-        return bot.edit_message_text(live_card_text(
+        return bot.edit_message_text(live_card_text(), chat_id=cid, message_id=mid, reply
