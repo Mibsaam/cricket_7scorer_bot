@@ -7,21 +7,18 @@ BOT_TOKEN = "8812331993:AAEREVNSHoSAIgPMYAz1dG1rhJP_RYRV0-w"
 
 app = Flask(__name__)
 @app.route("/")
-def h(): return "OK", 200
-
-def run_flask():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
-
-threading.Thread(target=run_flask, daemon=True).start()
+def home():
+    return "Bot is Running 24/7", 200
 
 def auto_ping():
     while True:
         time.sleep(300)
         try:
             r_url = os.environ.get("RENDER_EXTERNAL_URL")
-            if r_url: urllib.request.urlopen(r_url)
-        except: pass
+            if r_url:
+                urllib.request.urlopen(r_url)
+        except:
+            pass
 
 threading.Thread(target=auto_ping, daemon=True).start()
 
@@ -387,7 +384,6 @@ def on_action(call):
         m["await_input"] = "setup_squad_t1"
         return bot.edit_message_text(f"📋 *{m['bat_tm']}* ke saare players comma lagakar bhejein:\n`Talha, Adeeb, Mustafa, Wasim...`", chat_id=cid, message_id=mid, parse_mode="Markdown")
 
-    # DIRECT OPENING SELECTION VIA BUTTONS
     if cdata.startswith("pick_init_"):
         role = cdata.replace("pick_init_", "")
         tm = m["bat_tm"] if role in ["str", "nstr"] else m["bowl_tm"]
@@ -431,4 +427,5 @@ def on_action(call):
         return bot.edit_message_text(live_card_text(), chat_id=cid, message_id=mid, reply_markup=get_scoring_keyboard(), parse_mode="Markdown")
 
     if cdata == "opt_live_c":
-        if not m["active"]: return bot.answer_callback_
+        if not m["active"]: return bot.answer_callback_query(call.id, "No match active!", show_alert=True)
+        return bot.edit_message_text(live_card_text(), chat_id=cid, message_id=mid, reply_markup=ge
