@@ -8,7 +8,7 @@ import time
 from datetime import datetime
 
 # ================== CONFIG ==================
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8812331993:AAEREVNSHoSAIgPMYAz1dG1rhJP_RYRV0-w")  # Render pe env var se aayega
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8812331993:AAGiKVEV-xlPFs_-qS-7oeiA15t6y4SFPBk")  # Render pe env var se aayega
 bot = telebot.TeleBot(BOT_TOKEN)
 
 DATA_FILE = "career_data.json"
