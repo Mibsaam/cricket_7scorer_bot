@@ -97,7 +97,8 @@ def get_crr(r, b):
     return f"{(r / (b / 6)):.2f}" if b > 0 else "0.00"
 
 def get_h2h_str(t1, t2):
-    k1, k2 = f"{t1}_vs_{t2}", f"{t2}_vs_{t1}"
+    k1 = f"{t1}_vs_{t2}"
+    k2 = f"{t2}_vs_{t1}"
     w1 = H2H_DB.get(k1, 0)
     w2 = H2H_DB.get(k2, 0)
     return f"⚔️ H2H: {t1} ({w1}) - ({w2}) {t2}"
@@ -111,8 +112,8 @@ def get_rrr_line():
         return f"\n🏆 *Target Achieved! {m['bat_tm']} won!*"
     if rem_b <= 0:
         return f"\n🏁 *Overs Finished! Need {needed} off 0 balls*"
-    rrr = (needed / (rem_b / 6))
-    return f"\n🎯 *Target: {m['target']}* (Need *{needed}* runs off *{rem_b}* balls | RRR: *{rrr:.2f}*)"
+    rrr = needed / (rem_b / 6)
+    return f"\n🎯 *Target: {m['target']}* (Need *{needed}* off *{rem_b}*b | RRR: *{rrr:.2f}*)"
 
 def live_card_text():
     s_n = m["striker"]
@@ -160,13 +161,13 @@ def full_scorecard_text():
         status = f" (Out: {s.get('how_out', 'out')})" if s.get("out") else " (Not Out)"
         txt += f"• {n}{status}: {s['r']} ({s['b']}b) [4s:{s['4s']}, 6s:{s['6s']}] SR: {sr}\n"
     
-    txt += f"-----------------------------------------\n🎯 BOWLING STATS:\n"
+    txt += "-----------------------------------------\n🎯 BOWLING STATS:\n"
     for n, bw in m["bowlers"].items():
         econ = f"{(bw['r']/(bw['b']/6)):.2f}" if bw['b'] > 0 else "0.00"
         txt += f"• {n}: {get_overs_str(bw['b'])} ov | {bw['r']} runs | {bw['w']} wkts | Econ: {econ}\n"
     
     if m["over_history"]:
-        txt += f"-----------------------------------------\n📈 OVER PROGRESSION:\n"
+        txt += "-----------------------------------------\n📈 OVER PROGRESSION:\n"
         for i, ov in enumerate(m["over_history"], 1):
             txt += f"Over {i}: {' '.join(ov['balls'])} -> {ov['runs']} Runs ({ov['bowler']})\n"
     return txt
@@ -343,7 +344,9 @@ def cmd_start(msg):
 def cmd_score(msg):
     if not m["active"]:
         return bot.reply_to(msg, "⚠️ Abhi koi match active nahi hai.")
-    bot.reply_to(msg, live_card_text(), reply_markup=get_scoring_keyboard(), parse_mode="Markdown")
+    card_text = live_card_text()
+    card_kb = get_scoring_keyboard()
+    bot.reply_to(msg, card_text, reply_markup=card_kb, parse_mode="Markdown")
 
 @bot.callback_query_handler(func=lambda call: True)
 def on_action(call):
@@ -382,7 +385,9 @@ def on_action(call):
         m["await_input"] = "setup_match_names"
         return bot.edit_message_text(
             "🎯 *PRACTICE MATCH MODE ACTIVATED!*\n\n✍️ Format: `Team A | Team B | Total Overs`\nExample: `Practice 1 | Practice 2 | 5`",
-            chat_id=cid, message_id=mid, parse_mode="Markdown"
+            chat_id=cid,
+            message_id=mid,
+            parse_mode="Markdown"
         )
 
     if cdata == "opt_quick_mode":
@@ -423,7 +428,9 @@ def on_action(call):
         m["await_input"] = "setup_match_names"
         return bot.edit_message_text(
             "✍️ Setup Bhejein:\n`Team A | Team B | Total Overs`\nExample: `Mumbai Strikers | Team Unity | 10`",
-            chat_id=cid, message_id=mid, parse_mode="Markdown"
+            chat_id=cid,
+            message_id=mid,
+            parse_mode="Markdown"
         )
 
     if cdata.startswith("toss_call_"):
@@ -440,7 +447,8 @@ def on_action(call):
 
     if cdata.startswith("toss_el_"):
         parts = cdata.split("_")
-        choice, won = parts[2], parts[3]
+        choice = parts[2]
+        won = parts[3]
         other = m["t2"] if won == m["t1"] else m["t1"]
         m["bat_tm"] = won if choice == "bat" else other
         m["bowl_tm"] = other if choice == "bat" else won
@@ -451,40 +459,42 @@ def on_action(call):
         role = cdata.replace("pick_init_", "")
         tm = m["bat_tm"] if role in ["str", "nstr"] else m["bowl_tm"]
         lbl = "Striker" if role == "str" else ("Non-Striker" if role == "nstr" else "Opening Bowler")
-        return bot.edit_message_text(f"👉 Select {lbl} ({tm}):", chat_id=cid, message_id=mid, reply_markup=get_squad_picker(tm, f"init_{role}"))
+        picker_kb = get_squad_picker(tm, f"init_{role}")
+        return bot.edit_message_text(f"👉 Select {lbl} ({tm}):", chat_id=cid, message_id=mid, reply_markup=picker_kb)
 
     if cdata.startswith("sel_init_"):
         parts = cdata.split("_")
-        role, p_name = parts[2], parts[3]
+        role = parts[2]
+        p_name = parts[3]
         if role == "str":
             m["striker"] = p_name
             ensure_player(p_name, True)
-            return bot.edit_message_text(f"✅ Striker: *{p_name}*\n\n👉 Ab Non-Striker select karein:", chat_id=cid, message_id=mid, reply_markup=get_squad_picker(m["bat_tm"], "init_nstr"), parse_mode="Markdown")
+            next_kb = get_squad_picker(m["bat_tm"], "init_nstr")
+            return bot.edit_message_text(f"✅ Striker: *{p_name}*\n\n👉 Ab Non-Striker select karein:", chat_id=cid, message_id=mid, reply_markup=next_kb, parse_mode="Markdown")
         elif role == "nstr":
             m["non_striker"] = p_name
             ensure_player(p_name, True)
-            return bot.edit_message_text(f"✅ Non-Striker: *{p_name}*\n\n👉 Ab Opening Bowler select karein:", chat_id=cid, message_id=mid, reply_markup=get_squad_picker(m["bowl_tm"], "init_bowl"), parse_mode="Markdown")
+            next_kb = get_squad_picker(m["bowl_tm"], "init_bowl")
+            return bot.edit_message_text(f"✅ Non-Striker: *{p_name}*\n\n👉 Ab Opening Bowler select karein:", chat_id=cid, message_id=mid, reply_markup=next_kb, parse_mode="Markdown")
         elif role == "bowl":
             m["bowler"] = p_name
             ensure_player(p_name, False)
             m["active"] = True
-            return bot.edit_message_text(live_card_text(), chat_id=cid, message_id=mid, reply_markup=get_scoring_keyboard(), parse_mode="Markdown")
+            card_text = live_card_text()
+            card_kb = get_scoring_keyboard()
+            return bot.edit_message_text(card_text, chat_id=cid, message_id=mid, reply_markup=card_kb, parse_mode="Markdown")
 
     if cdata.startswith("pick_replace_"):
         target = cdata.replace("pick_replace_", "")
         tm = m["bat_tm"] if target in ["str", "nstr"] else m["bowl_tm"]
-        return bot.edit_message_text(f"Select replacement for {target}:", chat_id=cid, message_id=mid, reply_markup=get_squad_picker(tm, target))
+        picker_kb = get_squad_picker(tm, target)
+        return bot.edit_message_text(f"Select replacement for {target}:", chat_id=cid, message_id=mid, reply_markup=picker_kb)
 
     if cdata.startswith("sel_"):
         parts = cdata.split("_")
-        purpose, p_name = parts[1], parts[2]
+        purpose = parts[1]
+        p_name = parts[2]
         if purpose == "str":
             m["striker"] = p_name
             ensure_player(p_name, True)
-        elif purpose == "nstr":
-            m["non_striker"] = p_name
-            ensure_player(p_name, True)
-        elif purpose == "bowl":
-            m["bowler"] = p_name
-            ensure_player(p_name, False)
-        return bot.edit_message_text(live_card_text(), chat_id=cid, message_id=mid, reply
+        eli
