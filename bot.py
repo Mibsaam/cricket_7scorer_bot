@@ -3,10 +3,26 @@ import json
 import copy
 import time
 import random
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 BOT_TOKEN = "8812331993:AAEREVNSHoSAIgPMYAz1dG1rhJP_RYRV0-w"
+
+class SimpleHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"Bot is Running 24/7")
+
+def run_http_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), SimpleHandler)
+    server.serve_forever()
+
+threading.Thread(target=run_http_server, daemon=True).start()
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
@@ -493,14 +509,4 @@ def on_action(call):
             m["striker"] = p_name
             ensure_player(p_name, True)
             next_kb = get_squad_picker(m["bat_tm"], "init_nstr")
-            txt = "Striker: " + p_name + "\nNow select Non-Striker:"
-            return bot.edit_message_text(txt, chat_id=cid, message_id=mid, reply_markup=next_kb)
-        elif role == "nstr":
-            m["non_striker"] = p_name
-            ensure_player(p_name, True)
-            next_kb = get_squad_picker(m["bowl_tm"], "init_bowl")
-            txt = "Non-Striker: " + p_name + "\nNow select Opening Bowler:"
-            return bot.edit_message_text(txt, chat_id=cid, message_id=mid, reply_markup=next_kb)
-        elif role == "bowl":
-            m["bowler"] = p_name
-            ensur
+            txt = "Striker: " + p_name + "\nNow select Non-Striker
