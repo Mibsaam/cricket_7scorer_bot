@@ -1,21 +1,20 @@
-import os, json, copy, time, random
+import os, json, copy, time, random, threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+class H(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200); self.end_headers(); self.wfile.write(b"OK")
+
+threading.Thread(target=lambda: HTTPServer(("0.0.0.0", int(os.environ.get("PORT", 10000))), H).serve_forever(), daemon=True).start()
 
 BOT_TOKEN = "8812331993:AAEREVNSHoSAIgPMYAz1dG1rhJP_RYRV0-w"
 bot = telebot.TeleBot(BOT_TOKEN)
 C_FILE, T_FILE = "career_data.json", "teams_data.json"
 
-def load_db(f):
-    if os.path.exists(f):
-        try: return json.load(open(f))
-        except: return {}
-    return {}
-
-def save_db(f, d):
-    try: json.dump(d, open(f, "w"))
-    except: pass
-
+def load_db(f): return json.load(open(f)) if os.path.exists(f) else {}
+def save_db(f, d): json.dump(d, open(f, "w"))
 C_DB, T_DB = load_db(C_FILE), load_db(T_FILE)
 
 m = {
@@ -306,8 +305,4 @@ def inp_handler(msg):
     txt, ai = msg.text.strip(), m["inp"]
     m["inp"] = None
     if ai == "add_scorer":
-        if msg.reply_to_message: m["scorers"].add(msg.reply_to_message.from_user.id)
-        bot.reply_to(msg, "✅ Scorer permissions granted!")
-        bot.send_message(msg.chat.id, live_card(), reply_markup=kb_score())
-    elif ai and ai.startswith("custom_"):
-        pfx = ai.rep
+        if msg.reply_to
