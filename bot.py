@@ -1,13 +1,6 @@
-import os, json, copy, time, random, threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
+import os, json, copy, time, random
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-
-class H(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200); self.end_headers(); self.wfile.write(b"OK")
-
-threading.Thread(target=lambda: HTTPServer(("0.0.0.0", int(os.environ.get("PORT", 10000))), H).serve_forever(), daemon=True).start()
 
 BOT_TOKEN = "8812331993:AAEREVNSHoSAIgPMYAz1dG1rhJP_RYRV0-w"
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -315,4 +308,14 @@ def parse_multi(text):
     if len(parts) >= 3:
         ov = parts[-1]
         t2 = parts[-2]
-        t1 = " ".j
+        t1 = " ".join(parts[:-2])
+        return t1, t2, ov
+    return None
+
+@bot.message_handler(func=lambda msg: m["inp"] is not None)
+def inp_handler(msg):
+    txt, ai = msg.text.strip(), m["inp"]
+    m["inp"] = None
+    if ai == "add_scorer":
+        if msg.reply_to_message: m["scorers"].add(msg.reply_to_message.from_user.id)
+        bot.reply_to(ms
