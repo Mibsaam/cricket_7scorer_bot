@@ -3,7 +3,7 @@ from flask import Flask
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-BOT_TOKEN = "8812331993:AAF3pOsIWH5nlnFgxdkDYmozNLGli_CNyc0"
+BOT_TOKEN = "8812331993:AAHmi0s78veHmazGgw6G1a-85WzEVZAz1lQ"
 ADMIN_ID = 874225351
 AUTHORIZED_SCORERS = {ADMIN_ID}
 
