@@ -1,0 +1,692 @@
+import os, json, random, time, threading, urllib.request
+from flask import Flask
+import telebot
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+BOT_TOKEN = "8670400703:AAFx9ZbF8Hzv3SCU9TyN9Mh-LlOuKzV6p-k"
+ADMIN_ID = 874225351
+AUTHORIZED_SCORERS = {ADMIN_ID}
+DATA_FILE = "cricket_master_vault.json"
+
+# 24/7 FLASK KEEP-ALIVE SERVER
+app = Flask(__name__)
+@app.route("/")
+def home():
+    return "🏏 Ultimate Cricket Engine 24/7 Online & Lag-Free!", 200
+
+def run_flask_server():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
+
+threading.Thread(target=run_flask_server, daemon=True).start()
+
+def auto_ping_keepalive():
+    while True:
+        time.sleep(280)
+        try:
+            render_url = os.environ.get("RENDER_EXTERNAL_URL")
+            if render_url:
+                urllib.request.urlopen(render_url)
+        except:
+            pass
+
+threading.Thread(target=auto_ping_keepalive, daemon=True).start()
+
+bot = telebot.TeleBot(BOT_TOKEN)
+
+# DATABASE STRUCTURE
+def get_fresh_match():
+    return {
+        "match_id": f"M{random.randint(100, 999)}",
+        "series_name": "Pro Championship League 2026",
+        "ground": "Shivaji Park Arena",
+        "grounds_list": ["Shivaji Park Arena", "Azad Maidan", "Eden Gardens", "Local Street Ground"],
+        "stage": "League Match",
+        "current_inning": 1,
+        "teams": ["Mumbai Strikers", "Royal Fighters"],
+        "batting_team": "Mumbai Strikers",
+        "bowling_team": "Royal Fighters",
+        "total_match_overs": 7,
+        "toss_winner": None,
+        "toss_decision": None,
+        "runs": 0,
+        "wickets": 0,
+        "overs": 0.0,
+        "balls": 0,
+        "extras_total": 0,
+        "extras_wides": 0,
+        "extras_noballs": 0,
+        "extras_byes": 0,
+        "extras_legbyes": 0,
+        "target": 0,
+        "is_practice_mode": False,
+        "is_free_hit_active": False,
+        "free_hit_enabled": True,
+        "pinned_message_id": None,
+        "pinned_chat_id": None,
+        "striker": "Select Striker",
+        "non_striker": "Select Non-Striker",
+        "bowler": "Select Bowler",
+        "last_bowler": None,
+        "wicketkeeper": "Not Assigned",
+        "captain": "Not Assigned",
+        "partnership_runs": 0,
+        "partnership_balls": 0,
+        "current_over_runs": 0,
+        "recent_balls": [],
+        "fall_of_wickets": [],
+        "over_worm": {},
+        "ball_by_ball_log": [],
+        "innings_1_summary": {},
+        "match_status": "Active",
+        "awaiting_action": None,
+        "temp_data": {},
+        "bowling_quota_mode": "3-2-2",
+        "bowler_max_overs": {},
+        "squads": {
+            "Mumbai Strikers": ["Player 1", "Player 2", "Player 3", "Player 4", "Player 5"],
+            "Royal Fighters": ["Bowler A", "Bowler B", "Bowler C", "Bowler D", "Bowler E"]
+        },
+        "career_db": {
+            "Player 1": {"uuid": "PLY_01", "username": None, "team": "Mumbai Strikers", "matches": 5, "runs": 120, "balls": 80, "fours": 10, "sixes": 4, "wickets": 0, "bowled_balls": 0, "runs_given": 0, "catches": 3, "drops": 0, "stumpings": 0},
+            "Bowler A": {"uuid": "PLY_02", "username": None, "team": "Royal Fighters", "matches": 5, "runs": 15, "balls": 12, "fours": 1, "sixes": 0, "wickets": 6, "bowled_balls": 48, "runs_given": 38, "catches": 1, "drops": 1, "stumpings": 0}
+        },
+        "match_archives": []
+    }
+
+match = get_fresh_match()
+
+def save_vault():
+    try:
+        with open(DATA_FILE, "w") as f:
+            json.dump(match, f, indent=2)
+    except:
+        pass
+
+def load_vault():
+    global match
+    if os.path.exists(DATA_FILE):
+        try:
+            with open(DATA_FILE, "r") as f:
+                match = json.load(f)
+        except:
+            pass
+
+load_vault()
+
+def is_admin(uid):
+    return uid == ADMIN_ID
+
+def is_scorer(uid):
+    return uid in AUTHORIZED_SCORERS or is_admin(uid)
+
+def ensure_player_profile(p_name, team="General"):
+    if p_name not in match["career_db"]:
+        match["career_db"][p_name] = {
+            "uuid": f"PLY_{random.randint(1000, 9999)}",
+            "username": None,
+            "team": team,
+            "matches": 1,
+            "runs": 0,
+            "balls": 0,
+            "fours": 0,
+            "sixes": 0,
+            "wickets": 0,
+            "bowled_balls": 0,
+            "runs_given": 0,
+            "catches": 0,
+            "drops": 0,
+            "stumpings": 0
+        }
+        save_vault()
+
+def broadcast_commentary(cid, text):
+    try:
+        bot.send_message(cid, f"🎙️ **LIVE TV COMMENTARY:**\n{text}", parse_mode="Markdown")
+    except:
+        pass
+
+# LARGE HIGH-VISIBILITY SCORECARD
+def get_large_scoreboard_text():
+    mode = "🧪 [PRACTICE / FAKE MATCH]" if match["is_practice_mode"] else "🏆 [REAL OFFICIAL TOURNAMENT]"
+    fh = " 🔥 [FREE HIT ACTIVE]" if match["is_free_hit_active"] else ""
+    crr = (match['runs'] / (match['balls'] / 6)) if match['balls'] > 0 else 0.0
+    
+    targ_txt, bar_txt = "", ""
+    if match["current_inning"] == 2:
+        needed = max(0, match["target"] - match["runs"])
+        b_left = max(0, (match["total_match_overs"] * 6) - match["balls"])
+        rrr = (needed / (b_left / 6)) if b_left > 0 else 0.0
+        targ_txt = f"\n🎯 **TARGET:** `{match['target']}` | **NEED:** `{needed} runs in {b_left}b` (RRR: `{rrr:.2f}`)"
+        
+        pct = min(100, int((match["runs"] / match["target"]) * 100)) if match["target"] > 0 else 0
+        filled = int(pct / 10)
+        bar_txt = f"\n📊 Chasing: `[{'█'*filled}{'░'*(10-filled)}] {pct}% Completed`"
+
+    b_st = match["career_db"].get(match["bowler"], {"bowled_balls": 0, "runs_given": 0, "wickets": 0})
+    b_ov = f"{b_st['bowled_balls'] // 6}.{b_st['bowled_balls'] % 6}"
+    
+    rec_balls = " | ".join(match["recent_balls"][-6:]) if match["recent_balls"] else "-"
+    
+    return (
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"🏆 **{match['series_name']}** ({match['stage']})\n"
+        f"🏟️ **Ground:** `{match['ground']}` | _{mode}_{fh}\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"🔴 BATTING: **{match['batting_team']}**\n"
+        f"🟢 BOWLING: **{match['bowling_team']}**\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"🏏  **S C O R E B O A R D**  🏏\n"
+        f"👉  【 **{match['runs']}  /  {match['wickets']}** 】  👈\n"
+        f"⏳  OVERS: 【 **{match['overs']}  /  {match['total_match_overs']}.0** 】\n"
+        f"⚡  CRR: `{crr:.2f}` | EXTRAS: `{match['extras_total']}` (Wd:{match['extras_wides']}, NB:{match['extras_noballs']}, B/LB:{match['extras_byes'] + match['extras_legbyes']})\n"
+        f"━━━━━━━━━━━━━━━━━━━━"
+        f"{targ_txt}{bar_txt}\n"
+        f"🤝 **Partnership:** `{match['partnership_runs']} runs ({match['partnership_balls']} balls)`\n"
+        f"🎞️ **This Over:** `| {rec_balls} |`\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"🏏 **STRIKER:** 👉 **{match['striker']}** 👈\n"
+        f"🏃 **RUNNER:** {match['non_striker']}\n"
+        f"⚾ **BOWLER:** {match['bowler']} (`{b_st['wickets']}/{b_st['runs_given']}` in `{b_ov}` ov)\n"
+        f"🧤 **WK:** `{match['wicketkeeper']}` | **C:** `{match['captain']}`\n"
+        f"━━━━━━━━━━━━━━━━━━━━"
+    )
+
+# MAIN INTERACTIVE SCORER KEYBOARD
+def get_main_keyboard(uid):
+    m = InlineKeyboardMarkup(row_width=3)
+    
+    # SCORING BUTTONS (Authorized Only)
+    m.add(
+        InlineKeyboardButton("🔴 0 Dot", callback_data="act_run_0"),
+        InlineKeyboardButton("🟢 1 Run", callback_data="act_run_1"),
+        InlineKeyboardButton("🔵 2 Runs", callback_data="act_run_2")
+    )
+    m.add(
+        InlineKeyboardButton("🟡 3 Runs", callback_data="act_run_3"),
+        InlineKeyboardButton("🔥 4 Boundary", callback_data="act_run_4"),
+        InlineKeyboardButton("🚀 6 Sixer", callback_data="act_run_6")
+    )
+    m.add(
+        InlineKeyboardButton("⚡ Wide Menu", callback_data="menu_wide"),
+        InlineKeyboardButton("⚠️ No Ball Menu", callback_data="menu_noball"),
+        InlineKeyboardButton("🏃 Byes Menu", callback_data="menu_byes")
+    )
+    m.add(
+        InlineKeyboardButton("❌ WICKET MENU", callback_data="menu_wicket"),
+        InlineKeyboardButton("😱 Drop Catch", callback_data="act_drop_catch"),
+        InlineKeyboardButton("🔄 Strike Swap", callback_data="act_swap_strike")
+    )
+    m.add(
+        InlineKeyboardButton("👤 Striker", callback_data="pop_set_striker"),
+        InlineKeyboardButton("🏃 Non-Striker", callback_data="pop_set_nonstriker"),
+        InlineKeyboardButton("⚾ Bowler", callback_data="pop_set_bowler")
+    )
+    m.add(
+        InlineKeyboardButton("🚑 Split Bowler (Injury)", callback_data="pop_injury_split"),
+        InlineKeyboardButton("⚡ Quick Innings Entry", callback_data="menu_quick_innings")
+    )
+    m.add(
+        InlineKeyboardButton("📊 Score Summary", callback_data="view_summary"),
+        InlineKeyboardButton("📜 Match Archives", callback_data="view_archives"),
+        InlineKeyboardButton("⭐ MoM Award", callback_data="view_mom")
+    )
+    m.add(
+        InlineKeyboardButton("🏟️ Ground Selection", callback_data="menu_ground"),
+        InlineKeyboardButton("👥 Squads & Teams", callback_data="menu_squads"),
+        InlineKeyboardButton("🪙 Toss / Switch", callback_data="menu_toss_switch")
+    )
+    m.add(
+        InlineKeyboardButton("🧪 Toggle Practice Mode", callback_data="act_toggle_mode"),
+        InlineKeyboardButton("🗑️ Reset Practice", callback_data="act_reset_practice"),
+        InlineKeyboardButton("↩️ Undo Ball", callback_data="act_undo")
+    )
+    if is_admin(uid):
+        m.add(InlineKeyboardButton("🛠️ Admin Master Editor", callback_data="admin_editor_panel"))
+    return m
+
+def sync_pinned_scoreboard(cid):
+    try:
+        txt = get_large_scoreboard_text()
+        if match.get("pinned_message_id") and match.get("pinned_chat_id") == cid:
+            bot.edit_message_text(txt, chat_id=cid, message_id=match["pinned_message_id"], parse_mode="Markdown")
+    except:
+        pass
+
+@bot.message_handler(commands=['start', 'score', 'cricket'])
+def start_bot(msg):
+    m = InlineKeyboardMarkup(row_width=2)
+    m.add(
+        InlineKeyboardButton("🏆 Start Real Match", callback_data="init_real_match"),
+        InlineKeyboardButton("🧪 Start Practice Match", callback_data="init_practice_match")
+    )
+    bot.reply_to(msg, "🏏 **Cricket Engine Master Terminal**\nKripya Match Mode Select Karein:", reply_markup=m, parse_mode="Markdown")
+
+@bot.message_handler(commands=['profile'])
+def view_player_profile(msg):
+    txt = msg.text.replace("/profile", "").strip()
+    found_p, d = None, None
+    for p, data in match["career_db"].items():
+        if txt and (txt.lower() == p.lower() or (data.get("username") and txt.lower().replace("@", "") == data["username"].lower().replace("@", ""))):
+            found_p, d = p, data
+            break
+    if found_p:
+        sr = (d["runs"] / d["balls"] * 100) if d["balls"] > 0 else 0.0
+        econ = (d["runs_given"] / (d["bowled_balls"] / 6)) if d["bowled_balls"] > 0 else 0.0
+        tot_c = d["catches"] + d["drops"]
+        c_eff = (d["catches"] / tot_c * 100) if tot_c > 0 else 100.0
+        res = (
+            f"👤 **LIFETIME CAREER VAULT - {found_p}**\n"
+            f"🆔 UUID: `{d['uuid']}` | Team: `{d['team']}`\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏏 **Batting:** `{d['runs']} Runs` ({d['balls']}b) | SR: `{sr:.2f}`\n"
+            f"🔥 **Boundaries:** `{d['fours']} Fours` | `{d['sixes']} Sixes`\n"
+            f"⚾ **Bowling:** `{d['wickets']} Wickets` | Econ: `{econ:.2f}`\n"
+            f"🧤 **Fielding:** `{d['catches']} Catches` | `{d['drops']} Drops` (Catch Eff: `{c_eff:.1f}%`)\n"
+            f"━━━━━━━━━━━━━━━━━━━━"
+        )
+        bot.reply_to(msg, res, parse_mode="Markdown")
+    else:
+        bot.reply_to(msg, "❌ Player nahi mila. Use: `/profile PlayerName`", parse_mode="Markdown")
+
+@bot.message_handler(commands=['addscorer'])
+def add_new_scorer(msg):
+    if not is_admin(msg.from_user.id): return
+    try:
+        t_id = int(msg.text.replace("/addscorer", "").strip())
+        AUTHORIZED_SCORERS.add(t_id)
+        bot.reply_to(msg, f"✅ User `{t_id}` ko official Scorer permissions mil gayi!")
+    except:
+        bot.reply_to(msg, "Format: `/addscorer 12345678`")
+
+def check_match_finish(cid):
+    if match["current_inning"] == 2:
+        if match["runs"] >= match["target"]:
+            w_left = 10 - match["wickets"]
+            txt = f"🏆 🎊 **CHAMPIONS!** **{match['batting_team']}** WON by **{w_left} wickets**! 🥇"
+            broadcast_commentary(cid, txt)
+            archive_current_match()
+        elif match["overs"] >= match["total_match_overs"] or match["wickets"] >= 10:
+            margin = (match["target"] - 1) - match["runs"]
+            if margin == 0:
+                broadcast_commentary(cid, "🔥 ⚖️ **WHAT A THRILLER! MATCH TIED!**")
+            elif margin > 0:
+                txt = f"🏆 🎊 **VICTORY!** **{match['bowling_team']}** WON by **{margin} runs**! 🥇"
+                broadcast_commentary(cid, txt)
+            archive_current_match()
+
+def archive_current_match():
+    if not match["is_practice_mode"]:
+        m_entry = {
+            "match_id": match["match_id"],
+            "ground": match["ground"],
+            "teams": f"{match['teams'][0]} vs {match['teams'][1]}",
+            "score_1": match.get("innings_1_summary", {}),
+            "score_2": f"{match['batting_team']} {match['runs']}/{match['wickets']} in {match['overs']} ov",
+            "winner": match["batting_team"] if match["runs"] >= match["target"] else match["bowling_team"]
+        }
+        match["match_archives"].append(m_entry)
+        save_vault()
+
+def register_ball_event(cid, legal=True, ball_tag="0"):
+    if legal:
+        match["balls"] += 1
+        match["partnership_balls"] += 1
+        comp_ov = match["balls"] // 6
+        rem_b = match["balls"] % 6
+        match["overs"] = float(f"{comp_ov}.{rem_b}")
+        match["recent_balls"].append(ball_tag)
+        ensure_player_profile(match["bowler"])
+        match["career_db"][match["bowler"]]["bowled_balls"] += 1
+        
+        if match["is_free_hit_active"]:
+            match["is_free_hit_active"] = False
+
+        if rem_b == 0 and match["balls"] > 0:
+            match["over_worm"][comp_ov] = match["current_over_runs"]
+            match["current_over_runs"] = 0
+            
+            # Strike auto switch on over end
+            match["striker"], match["non_striker"] = match["non_striker"], match["striker"]
+            match["last_bowler"] = match["bowler"]
+            match["bowler"] = "Select Bowler"
+            
+            broadcast_commentary(cid, f"🏁 **OVER {comp_ov} COMPLETE!** Strike Rotated. Current Score: `{match['runs']}/{match['wickets']}`")
+            
+            # Smart Auto-Popup for Next Bowler
+            m = InlineKeyboardMarkup(row_width=2)
+            for p in match["squads"].get(match["bowling_team"], []):
+                if p != match["last_bowler"]:
+                    m.add(InlineKeyboardButton(f"⚾ {p}", callback_data=f"sel_bowl_{p}"))
+            m.add(InlineKeyboardButton("➕ Type New Bowler", callback_data="type_new_bowler"))
+            try:
+                bot.send_message(cid, f"🚨 **Select Next Bowler for Over {comp_ov+1}:**", reply_markup=m, parse_mode="Markdown")
+            except:
+                pass
+
+        save_vault()
+        sync_pinned_scoreboard(cid)
+        check_match_finish(cid)
+
+@bot.callback_query_handler(func=lambda c: True)
+def master_callback_router(c):
+    try:
+        uid, dt = c.from_user.id, c.data
+        cid = c.message.chat.id
+
+        # VIEW-ONLY BUTTONS (Accessible to ALL users)
+        if dt == "view_summary":
+            inn1 = match.get("innings_1_summary", "Innings 1 Not Started")
+            txt = f"📊 **MATCH SCORECARD SUMMARY**\n━━━━━━━━━━━━━━━━━━━━\n📌 1st Innings: `{inn1}`\n📌 2nd Innings: `{match['batting_team']} {match['runs']}/{match['wickets']} in {match['overs']} ov`\n🎯 Target: `{match['target']}`\n━━━━━━━━━━━━━━━━━━━━"
+            return bot.send_message(cid, txt, parse_mode="Markdown")
+
+        if dt == "view_archives":
+            if not match["match_archives"]:
+                return bot.answer_callback_query(c.id, "No past matches archived yet!", show_alert=True)
+            m = InlineKeyboardMarkup(row_width=1)
+            for arc in match["match_archives"][-8:]:
+                m.add(InlineKeyboardButton(f"📁 #{arc['match_id']}: {arc['teams']} ({arc['ground']})", callback_data=f"arc_{arc['match_id']}"))
+            return bot.send_message(cid, "📜 **MATCH ARCHIVE VAULT (Khata Records):**", reply_markup=m, parse_mode="Markdown")
+
+        if dt.startswith("arc_"):
+            m_id = dt.replace("arc_", "")
+            entry = next((a for a in match["match_archives"] if a["match_id"] == m_id), None)
+            if entry:
+                txt = f"📜 **ARCHIVED MATCH #{entry['match_id']}**\n🏟️ Ground: `{entry['ground']}`\n⚔️ Teams: `{entry['teams']}`\n🥇 Result: `{entry['winner']} WON`"
+                return bot.send_message(cid, txt, parse_mode="Markdown")
+
+        if dt == "view_mom":
+            best_p, max_pts = "None", -999
+            for p, st in match["career_db"].items():
+                pts = (st["runs"] * 1.2) + (st["fours"] * 1.5) + (st["sixes"] * 2.5) + (st["wickets"] * 35) + (st["catches"] * 10) - (st["drops"] * 5)
+                if pts > max_pts:
+                    max_pts, best_p = pts, p
+            return bot.send_message(cid, f"🏆 **MAN OF THE MATCH (MVP):** `{best_p}` (Rating: `{max_pts:.1f}` pts)", parse_mode="Markdown")
+
+        # PERMISSION GATE FOR SCORING & SETTINGS
+        if not match["is_practice_mode"] and not is_scorer(uid):
+            return bot.answer_callback_query(c.id, "⚠️ Only Official Scorers & Admin can score in Real Mode!", show_alert=True)
+
+        # MODE SELECTOR
+        if dt == "init_real_match" or dt == "init_practice_match":
+            match["is_practice_mode"] = (dt == "init_practice_match")
+            save_vault()
+            bot.send_message(cid, get_large_scoreboard_text(), reply_markup=get_main_keyboard(uid), parse_mode="Markdown")
+            return bot.answer_callback_query(c.id, f"Mode set to {'Practice' if match['is_practice_mode'] else 'Real'}")
+
+        # 1. RUN SCORING (Direction & Popups)
+        if dt.startswith("act_run_"):
+            r = int(dt.replace("act_run_", ""))
+            match["temp_data"]["run_val"] = r
+            m = InlineKeyboardMarkup(row_width=2)
+            for ar in ["Cover", "Point", "Mid-Wicket", "Long-On", "Long-Off", "Square-Leg", "Third-Man", "Fine-Leg"]:
+                m.add(InlineKeyboardButton(f"🎯 {ar}", callback_data=f"shot_{ar}"))
+            return bot.edit_message_text(f"🎯 **Select Shot Direction for {r} Run(s):**", chat_id=cid, message_id=c.message.message_id, reply_markup=m, parse_mode="Markdown")
+
+        if dt.startswith("shot_"):
+            area = dt.replace("shot_", "")
+            r = match["temp_data"].get("run_val", 0)
+            ensure_player_profile(match["striker"], match["batting_team"])
+            ensure_player_profile(match["bowler"], match["bowling_team"])
+            
+            match["runs"] += r
+            match["current_over_runs"] += r
+            match["partnership_runs"] += r
+            
+            p_st = match["career_db"][match["striker"]]
+            p_st["runs"] += r
+            p_st["balls"] += 1
+            if r == 4:
+                p_st["fours"] += 1
+                broadcast_commentary(cid, f"🔥 **FOUR!** `{match['striker']}` blasts `{match['bowler']}` through `{area}` with elegance!")
+            elif r == 6:
+                p_st["sixes"] += 1
+                broadcast_commentary(cid, f"🚀 **MASSIVE SIX!** `{match['striker']}` deposits `{match['bowler']}` way over `{area}`!")
+
+            match["career_db"][match["bowler"]]["runs_given"] += r
+            register_ball_event(cid, legal=True, ball_tag=str(r))
+            
+            if r in [1, 3]:
+                match["striker"], match["non_striker"] = match["non_striker"], match["striker"]
+            
+            save_vault()
+            return bot.edit_message_text(get_large_scoreboard_text(), chat_id=cid, message_id=c.message.message_id, reply_markup=get_main_keyboard(uid), parse_mode="Markdown")
+
+        # 2. WIDE MENU
+        if dt == "menu_wide":
+            m = InlineKeyboardMarkup(row_width=3)
+            for r in range(7):
+                m.add(InlineKeyboardButton(f"Wide + {r} Extra", callback_data=f"exec_wide_{r}"))
+            m.add(InlineKeyboardButton("⬅️ Back", callback_data="back_main"))
+            return bot.edit_message_text("⚡ **Select Wide Ball Deliveries:**", chat_id=cid, message_id=c.message.message_id, reply_markup=m, parse_mode="Markdown")
+
+        if dt.startswith("exec_wide_"):
+            ex = int(dt.replace("exec_wide_", ""))
+            tot = 1 + ex
+            match["runs"] += tot
+            match["current_over_runs"] += tot
+            match["extras_total"] += tot
+            match["extras_wides"] += tot
+            ensure_player_profile(match["bowler"], match["bowling_team"])
+            match["career_db"][match["bowler"]]["runs_given"] += tot
+            match["recent_balls"].append(f"Wd+{ex}")
+            save_vault()
+            check_match_finish(cid)
+            return bot.edit_message_text(get_large_scoreboard_text(), chat_id=cid, message_id=c.message.message_id, reply_markup=get_main_keyboard(uid), parse_mode="Markdown")
+
+        # 3. NO BALL MENU
+        if dt == "menu_noball":
+            m = InlineKeyboardMarkup(row_width=3)
+            for r in range(7):
+                m.add(InlineKeyboardButton(f"NB + {r} Bat Runs", callback_data=f"exec_nb_{r}"))
+            m.add(InlineKeyboardButton("⬅️ Back", callback_data="back_main"))
+            return bot.edit_message_text("⚠️ **Select No Ball Deliveries (+1 Extra Auto):**", chat_id=cid, message_id=c.message.message_id, reply_markup=m, parse_mode="Markdown")
+
+        if dt.startswith("exec_nb_"):
+            bat_r = int(dt.replace("exec_nb_", ""))
+            tot = 1 + bat_r
+            match["runs"] += tot
+            match["current_over_runs"] += tot
+            match["extras_total"] += 1
+            match["extras_noballs"] += 1
+            match["partnership_runs"] += bat_r
+            
+            ensure_player_profile(match["striker"], match["batting_team"])
+            p_st = match["career_db"][match["striker"]]
+            p_st["runs"] += bat_r
+            if bat_r == 4: p_st["fours"] += 1
+            if bat_r == 6: p_st["sixes"] += 1
+            
+            ensure_player_profile(match["bowler"], match["bowling_team"])
+            match["career_db"][match["bowler"]]["runs_given"] += tot
+            match["recent_balls"].append(f"NB+{bat_r}")
+            
+            if match["free_hit_enabled"]:
+                match["is_free_hit_active"] = True
+                broadcast_commentary(cid, f"⚠️ 🚀 **NO BALL!** Free Hit awarded to `{match['striker']}` on the next legal delivery!")
+            
+            if bat_r in [1, 3]:
+                match["striker"], match["non_striker"] = match["non_striker"], match["striker"]
+            save_vault()
+            check_match_finish(cid)
+            return bot.edit_message_text(get_large_scoreboard_text(), chat_id=cid, message_id=c.message.message_id, reply_markup=get_main_keyboard(uid), parse_mode="Markdown")
+
+        # 4. WICKETS & CATCH TRACKER
+        if dt == "menu_wicket":
+            m = InlineKeyboardMarkup(row_width=2)
+            m.add(InlineKeyboardButton("🔴 Bowled", callback_data="wkt_bowled"), InlineKeyboardButton("🟡 Caught Out", callback_data="wkt_caught"))
+            m.add(InlineKeyboardButton("🟢 Run Out", callback_data="wkt_runout"), InlineKeyboardButton("🔵 Stumped", callback_data="wkt_stumped"))
+            m.add(InlineKeyboardButton("⬅️ Back", callback_data="back_main"))
+            return bot.edit_message_text("❌ **Select Mode of Dismissal:**", chat_id=cid, message_id=c.message.message_id, reply_markup=m, parse_mode="Markdown")
+
+        if dt in ["wkt_bowled", "wkt_stumped"]:
+            if match["is_free_hit_active"]:
+                return bot.answer_callback_query(c.id, "⚠️ Free Hit Active! Only Run Out allowed!", show_alert=True)
+            return execute_wicket_dismissal(cid, c.message.message_id, dt.replace("wkt_", "").capitalize(), uid)
+
+        if dt == "wkt_caught":
+            if match["is_free_hit_active"]:
+                return bot.answer_callback_query(c.id, "⚠️ Free Hit Active! Catch out not allowed!", show_alert=True)
+            m = InlineKeyboardMarkup(row_width=2)
+            for fld in match["squads"].get(match["bowling_team"], []):
+                m.add(InlineKeyboardButton(f"🙌 {fld}", callback_data=f"catch_by_{fld}"))
+            m.add(InlineKeyboardButton("➕ New Fielder Name", callback_data="type_catch_fielder"))
+            return bot.edit_message_text(f"🙌 **Who took the catch ({match['bowling_team']})?**", chat_id=cid, message_id=c.message.message_id, reply_markup=m, parse_mode="Markdown")
+
+        if dt.startswith("catch_by_"):
+            f_name = dt.replace("catch_by_", "")
+            ensure_player_profile(f_name, match["bowling_team"])
+            match["career_db"][f_name]["catches"] += 1
+            return execute_wicket_dismissal(cid, c.message.message_id, f"Caught by {f_name}", uid)
+
+        if dt == "act_drop_catch":
+            m = InlineKeyboardMarkup(row_width=2)
+            for fld in match["squads"].get(match["bowling_team"], []):
+                m.add(InlineKeyboardButton(f"❌ {fld}", callback_data=f"drop_by_{fld}"))
+            return bot.edit_message_text("😱 **Who dropped the catch?**", chat_id=cid, message_id=c.message.message_id, reply_markup=m, parse_mode="Markdown")
+
+        if dt.startswith("drop_by_"):
+            f_name = dt.replace("drop_by_", "")
+            ensure_player_profile(f_name, match["bowling_team"])
+            match["career_db"][f_name]["drops"] += 1
+            broadcast_commentary(cid, f"😱 💔 **CATCH DROPPED!** `{f_name}` puts down an absolute sitter off `{match['bowler']}`!")
+            save_vault()
+            return bot.edit_message_text(get_large_scoreboard_text(), chat_id=cid, message_id=c.message.message_id, reply_markup=get_main_keyboard(uid), parse_mode="Markdown")
+
+        # 5. MID-OVER INJURY SPLIT
+        if dt == "pop_injury_split":
+            m = InlineKeyboardMarkup(row_width=2)
+            for p in match["squads"].get(match["bowling_team"], []):
+                if p != match["bowler"]:
+                    m.add(InlineKeyboardButton(f"🚑 {p}", callback_data=f"split_to_{p}"))
+            return bot.edit_message_text("🚑 **Select Replacement Bowler to finish current over:**", chat_id=cid, message_id=c.message.message_id, reply_markup=m, parse_mode="Markdown")
+
+        if dt.startswith("split_to_"):
+            new_b = dt.replace("split_to_", "")
+            prev_b = match["bowler"]
+            match["bowler"] = new_b
+            ensure_player_profile(new_b, match["bowling_team"])
+            broadcast_commentary(cid, f"🚑 **INJURY REPLACEMENT:** `{prev_b}` walks off injured! `{new_b}` steps up to finish the remaining deliveries of this over.")
+            save_vault()
+            return bot.edit_message_text(get_large_scoreboard_text(), chat_id=cid, message_id=c.message.message_id, reply_markup=get_main_keyboard(uid), parse_mode="Markdown")
+
+        # 6. QUICK MANUAL INNINGS ENTRY
+        if dt == "menu_quick_innings":
+            m = InlineKeyboardMarkup(row_width=3)
+            for ov in [5, 7, 8, 10, 12, 15, 20]:
+                m.add(InlineKeyboardButton(f"{ov} Overs", callback_data=f"q_ov_{ov}"))
+            return bot.edit_message_text("⚡ **Quick Opponent Innings:** Overs kitne khele gaye?", chat_id=cid, message_id=c.message.message_id, reply_markup=m, parse_mode="Markdown")
+
+        if dt.startswith("q_ov_"):
+            match["temp_data"]["q_overs"] = int(dt.replace("q_ov_", ""))
+            m = InlineKeyboardMarkup(row_width=4)
+            for w in range(11):
+                m.add(InlineKeyboardButton(f"{w} Wkts", callback_data=f"q_wkt_{w}"))
+            return bot.edit_message_text("⚡ **Quick Opponent Innings:** Kitni wickets giri?", chat_id=cid, message_id=c.message.message_id, reply_markup=m, parse_mode="Markdown")
+
+        if dt.startswith("q_wkt_"):
+            match["temp_data"]["q_wkts"] = int(dt.replace("q_wkt_", ""))
+            match["awaiting_action"] = "input_quick_runs"
+            return bot.edit_message_text("✍️ Total opponent **Runs** type karke send karein:", chat_id=cid, message_id=c.message.message_id, parse_mode="Markdown")
+
+        # 7. BATSMAN / BOWLER SELECTORS
+        if dt == "pop_set_striker":
+            m = InlineKeyboardMarkup(row_width=2)
+            for p in match["squads"].get(match["batting_team"], []):
+                m.add(InlineKeyboardButton(f"🏏 {p}", callback_data=f"sel_str_{p}"))
+            m.add(InlineKeyboardButton("➕ Type New Batsman", callback_data="type_new_batsman"))
+            return bot.edit_message_text("👤 **Select Striker:**", chat_id=cid, message_id=c.message.message_id, reply_markup=m, parse_mode="Markdown")
+
+        if dt.startswith("sel_str_"):
+            p_name = dt.replace("sel_str_", "")
+            match["striker"] = p_name
+            ensure_player_profile(p_name, match["batting_team"])
+            save_vault()
+            return bot.edit_message_text(get_large_scoreboard_text(), chat_id=cid, message_id=c.message.message_id, reply_markup=get_main_keyboard(uid), parse_mode="Markdown")
+
+        if dt == "pop_set_bowler":
+            m = InlineKeyboardMarkup(row_width=2)
+            for p in match["squads"].get(match["bowling_team"], []):
+                m.add(InlineKeyboardButton(f"⚾ {p}", callback_data=f"sel_bowl_{p}"))
+            return bot.edit_message_text("⚾ **Select Bowler:**", chat_id=cid, message_id=c.message.message_id, reply_markup=m, parse_mode="Markdown")
+
+        if dt.startswith("sel_bowl_"):
+            p_name = dt.replace("sel_bowl_", "")
+            match["bowler"] = p_name
+            ensure_player_profile(p_name, match["bowling_team"])
+            save_vault()
+            return bot.edit_message_text(get_large_scoreboard_text(), chat_id=cid, message_id=c.message.message_id, reply_markup=get_main_keyboard(uid), parse_mode="Markdown")
+
+        # 8. TOSS / STRIKE SWAP
+        if dt == "act_swap_strike":
+            match["striker"], match["non_striker"] = match["non_striker"], match["striker"]
+            save_vault()
+            return bot.edit_message_text(get_large_scoreboard_text(), chat_id=cid, message_id=c.message.message_id, reply_markup=get_main_keyboard(uid), parse_mode="Markdown")
+
+        if dt == "act_toggle_mode":
+            match["is_practice_mode"] = not match["is_practice_mode"]
+            save_vault()
+            return bot.edit_message_text(get_large_scoreboard_text(), chat_id=cid, message_id=c.message.message_id, reply_markup=get_main_keyboard(uid), parse_mode="Markdown")
+
+        if dt == "act_reset_practice":
+            if match["is_practice_mode"] or is_admin(uid):
+                match.update({"runs": 0, "wickets": 0, "overs": 0.0, "balls": 0, "extras_total": 0, "extras_wides": 0, "extras_noballs": 0, "extras_byes": 0, "extras_legbyes": 0, "partnership_runs": 0, "partnership_balls": 0, "recent_balls": [], "current_over_runs": 0})
+                save_vault()
+                return bot.edit_message_text(get_large_scoreboard_text(), chat_id=cid, message_id=c.message.message_id, reply_markup=get_main_keyboard(uid), parse_mode="Markdown")
+            else:
+                return bot.answer_callback_query(c.id, "⚠️ Only Admin can reset official match!", show_alert=True)
+
+        if dt == "back_main":
+            return bot.edit_message_text(get_large_scoreboard_text(), chat_id=cid, message_id=c.message.message_id, reply_markup=get_main_keyboard(uid), parse_mode="Markdown")
+
+    except Exception as e:
+        bot.answer_callback_query(c.id, "Action completed.")
+
+def execute_wicket_dismissal(cid, mid, reason, uid):
+    if match["wickets"] < 10:
+        match["wickets"] += 1
+        ensure_player_profile(match["striker"], match["batting_team"])
+        ensure_player_profile(match["bowler"], match["bowling_team"])
+        match["career_db"][match["striker"]]["balls"] += 1
+        match["career_db"][match["bowler"]]["wickets"] += 1
+        
+        broadcast_commentary(cid, f"🚨 💥 **WICKET FALLS!** `{match['striker']}` dismissed ({reason}) off `{match['bowler']}`! Score: `{match['runs']}/{match['wickets']}`")
+        match["partnership_runs"], match["partnership_balls"] = 0, 0
+        register_ball_event(cid, legal=True, ball_tag="W")
+        match["striker"] = "Select Striker"
+        save_vault()
+        
+        # Smart Pop-up for Next Batsman
+        m = InlineKeyboardMarkup(row_width=2)
+        for p in match["squads"].get(match["batting_team"], []):
+            if p != match["non_striker"]:
+                m.add(InlineKeyboardButton(f"🏏 {p}", callback_data=f"sel_str_{p}"))
+        m.add(InlineKeyboardButton("➕ Type New Batsman", callback_data="type_new_batsman"))
+        bot.send_message(cid, "👤 **Select Next Striker walking in:**", reply_markup=m, parse_mode="Markdown")
+        return bot.edit_message_text(get_large_scoreboard_text(), chat_id=cid, message_id=mid, reply_markup=get_main_keyboard(uid), parse_mode="Markdown")
+
+@bot.message_handler(func=lambda m: match.get("awaiting_action") is not None)
+def master_text_inputs(msg):
+    uid, act = msg.from_user.id, match.get("awaiting_action")
+    txt = msg.text.strip()
+    match["awaiting_action"] = None
+    
+    if act == "input_quick_runs":
+        try:
+            r = int(txt)
+            ov = match["temp_data"].get("q_overs", 7)
+            w = match["temp_data"].get("q_wkts", 5)
+            match["innings_1_summary"] = f"{match['bowling_team']} {r}/{w} in {ov} ov"
+            match["target"] = r + 1
+            match["current_inning"] = 2
+            match.update({"runs": 0, "wickets": 0, "overs": 0.0, "balls": 0, "extras_total": 0, "partnership_runs": 0, "partnership_balls": 0, "recent_balls": []})
+            save_vault()
+            bot.reply_to(msg, f"✅ **Target Set: {match['target']} Runs**\n\n{get_large_scoreboard_text()}", reply_markup=get_main_keyboard(uid), parse_mode="Markdown")
+        except:
+            bot.reply_to(msg, "❌ Invalid run number!")
+
+if __name__ == "__main__":
+    try: bot.remove_webhook()
+    except: pass
+    print("Master 24/7 Cricket Engine Loaded & Active.")
+    bot.infinity_polling(skip_pending=True, timeout=25)
