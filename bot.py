@@ -9,7 +9,7 @@ from flask import Flask
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-BOT_TOKEN = "8670400703:AAG4GSUWgJ8oyIK6y6j0UorJkqXIXQr5kUk"
+BOT_TOKEN = "8812331993:AAFm0uvGcDiEYwbKDdqCXGTXg6-8J_10ya0"
 ADMIN_ID = 874225351
 AUTHORIZED_SCORERS = {ADMIN_ID}
 DATA_FILE = "master_cricket_database.json"
